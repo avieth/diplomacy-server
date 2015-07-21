@@ -1,0 +1,611 @@
+<html>
+  <head>
+  </head>
+
+  <body>
+
+    <script>
+
+      var clearContainer = function (in_container) {
+        while (in_container.firstChild) {
+          in_container.removeChild(in_container.firstChild);
+        }
+      };
+
+      var uiGameId = function (in_container, in_callback) {
+        var inputGameId = document.createElement('input');
+        var divLabel = document.createElement('div');
+        divLabel.innerHTML = 'Game name: ';
+        var form = document.createElement('form');
+        form.addEventListener('submit', function (in_event) {
+          var gameId = inputGameId.value;
+          in_event.preventDefault();
+          in_event.stopPropagation();
+          in_callback(gameId);
+          return false;
+        });
+        form.appendChild(divLabel);
+        form.appendChild(inputGameId);
+        clearContainer(in_container);
+        in_container.appendChild(form);
+        inputGameId.focus();
+      };
+
+      var uiPassword = function (in_container, in_callback) {
+        var inputPassword = document.createElement('input');
+        inputPassword.type = 'password';
+        var divLabel = document.createElement('div');
+        divLabel.innerHTML = 'Password: ';
+        var form = document.createElement('form');
+        form.addEventListener('submit', function (in_event) {
+          var password = inputPassword.value;
+          in_event.preventDefault();
+          in_event.stopPropagation();
+          in_callback(password);
+          return false;
+        });
+        form.appendChild(divLabel);
+        form.appendChild(inputPassword);
+        clearContainer(in_container);
+        in_container.appendChild(form);
+        inputPassword.focus();
+      };
+
+      var uiUsername = function (in_container, in_callback) {
+        var inputUsername = document.createElement('input');
+        var divLabel = document.createElement('div');
+        divLabel.innerHTML = 'Username: ';
+        var form = document.createElement('form');
+        form.addEventListener('submit', function (in_event) {
+          var username = inputUsername.value;
+          in_event.preventDefault();
+          in_event.stopPropagation();
+          in_callback(username);
+          return false;
+        });
+        form.appendChild(divLabel);
+        form.appendChild(inputUsername);
+        clearContainer(in_container);
+        in_container.appendChild(form);
+        inputUsername.focus();
+      };
+
+      var uiInitial = function (in_container) {
+        var element = buttons([
+          {
+            text : 'Play',
+            click : function () {
+              uiPlay(in_container);
+            }
+          },
+          { 
+            text : 'Administrate',
+            click : function () {
+              uiAdmin(in_container);
+            }
+          }
+        ]);
+        clearContainer(in_container);
+        in_container.appendChild(element);
+      };
+
+      var uiAdmin = function (in_container) {
+        var element = buttons([
+          {
+            text : 'Create',
+            click : function () {
+              uiGameId(in_container, function (in_gameId) {
+                uiPassword(in_container, function (in_gamePassword) {
+                  uiUsername(in_container, function (in_username) {
+                    uiPassword(in_container, function (in_password) {
+                      createGame(in_container, in_gameId, in_gamePassword, in_username, in_password, function (in_error) {
+                        if (in_error) {
+                          uiInitial(in_container);
+                        } else {
+                          uiInitial(in_container);
+                        }
+                      });
+                    });
+                  });
+                });
+              });
+            }
+          },
+          {
+            text : 'Start',
+            click : function () {
+              uiGameId(in_container, function (in_gameId) {
+                uiUsername(in_container, function (in_username) {
+                  uiPassword(in_container, function (in_password) {
+                    startGame(in_container, in_gameId, in_username, in_password, function (in_error) {
+                      if (in_error) {
+                        uiInitial(in_container);
+                      } else {
+                        uiInitial(in_container);
+                      }
+                    });
+                  });
+                });
+              });
+            }
+          },
+          {
+            text : 'Advance',
+            click : function () {
+              uiGameId(in_container, function (in_gameId) {
+                uiUsername(in_container, function (in_username) {
+                  uiPassword(in_container, function (in_password) {
+                    advanceGame(in_container, in_gameId, in_username, in_password, function (in_error) {
+                      if (in_error) {
+                        uiInitial(in_container);
+                      } else {
+                        uiInitial(in_container);
+                      }
+                    });
+                  });
+                });
+              });
+            }
+          },
+          {
+            text : 'Destroy',
+            click : function () {
+              uiGameId(in_container, function (in_gameId) {
+                uiUsername(in_container, function (in_username) {
+                  uiPassword(in_container, function (in_password) {
+                    destroyGame(in_container, in_gameId, in_username, in_password, function (in_error) {
+                      if (in_error) {
+                        uiInitial(in_container);
+                      } else {
+                        uiInitial(in_container);
+                      }
+                    });
+                  });
+                });
+              });
+            }
+          }
+        ]);
+        clearContainer(in_container);
+        in_container.appendChild(element);
+      };
+
+      var uiPlay = function (in_container) {
+        var element = buttons([
+          {
+            text : 'Continue existing game',
+            click : function () {
+              uiGameId(in_container, function (in_gameId) {
+                uiUsername(in_container, function (in_username) {
+                  uiPassword(in_container, function (in_password) {
+                    uiPlayGame(in_container, in_gameId, in_username, in_password);
+                  });
+                });
+              });
+            }
+          },
+          {
+            text : 'Join game',
+            click : function () {
+              uiGameId(in_container, function (in_gameId) {
+                uiPassword(in_container, function (in_gamePassword) {
+                  uiUsername(in_container, function (in_username) {
+                    uiPassword(in_container, function (in_password) {
+                      joinGame(in_container, in_gameId, in_gamePassword, in_username, in_password, function (in_error) {
+                        if (in_error) {
+                          uiPlay(in_container);
+                        } else {
+                          uiPlayGame(in_container, in_gameId, in_username, in_password);
+                        }
+                      });
+                    });
+                  });
+                });
+              });
+            }
+          }
+        ]);
+        clearContainer(in_container);
+        in_container.appendChild(element);
+      };
+
+      var uiPlayGame = function (in_container, in_gameId, in_username, in_password) {
+        clearContainer(in_container);
+        fetchGame(in_container, in_gameId, in_username, in_password, function (in_error, in_gameView) {
+          if (in_error) {
+            uiInitial(in_container);
+          } else {
+            uiGameView(in_container, in_gameId, in_username, in_password, in_gameView);
+          }
+        });
+      };
+
+      var uiGameView = function (in_container, in_gameId, in_username, in_password, in_gameView) {
+        clearContainer(in_container);
+        if (in_gameView.tag === 'GameNotStarted') {
+          var divLabel = document.createElement('div');
+          divLabel.innerHTML = 'Game not started';
+          in_container.appendChild(divLabel);
+        } else if (in_gameView.tag === 'GameStarted') {
+          var metadata = in_gameView.components.metadata;
+          var greatPowers = in_gameView.components.greatPowers;
+          var occupation = in_gameView.components.occupation;
+          var dislodgement = in_gameView.components.dislodgement;
+          var control = in_gameView.components.control;
+          showMetadata(in_container, metadata);
+          showMap(in_container, metadata, greatPowers, occupation, dislodgement, control);
+        } else {
+          var divLabel = document.createElement('div');
+          divLabel.innerHTML = 'Unknown game state is unknown';
+          in_container.appendChild(divLabel);
+        }
+        var divRefresh = document.createElement('div');
+        divRefresh.innerHTML = 'Refresh';
+        divRefresh.style.width = '100%';
+        divRefresh.addEventListener('mouseenter', function () {
+          divRefresh.style.backgroundColor = 'green';
+        });
+        divRefresh.addEventListener('mouseleave', function () {
+          divRefresh.style.backgroundColor = '';
+        });
+        divRefresh.addEventListener('click', function () {
+          uiPlayGame(in_container, in_gameId, in_username, in_password);
+        });
+        in_container.appendChild(divRefresh);
+      };
+
+      var showMetadata = function (in_container, in_metadata) {
+        var divYear = document.createElement('div');
+        divYear.innerHTML = String(1900 + Number(in_metadata.turn))
+        var divSeason = document.createElement('div');
+        var round = Number(in_metadata.round)
+        var season;
+        if (round === 4) {
+          season = 'Winter';
+        } else if (round < 2) {
+          season = 'Spring';
+        } else {
+          season = 'Fall';
+        }
+        divSeason.innerHTML = season;
+        var divRetreat = document.createElement('div');
+        if (round == 1 || round === 3) {
+          divRetreat.innerHTML = 'Retreat';
+        }
+        var divResolved = document.createElement('div');
+        var divTimeRemaining = 
+        in_container.appendChild(divYear);
+        in_container.appendChild(divSeason);
+        in_container.appendChild(divRetreat);
+        in_container.appendChild(divResolved);
+      };
+
+      var joinGame = function (in_container, in_gameId, in_gamePassword, in_username, in_password, in_callback) {
+        var xhr = new XMLHttpRequest();
+        xhr.open('PUT', window.location + '/game/' + in_gameId + '/join');
+        xhr.addEventListener('load', function (in_event) {
+          if (xhr.status === 200) {
+            in_callback(false);
+          } else if (xhr.status === 404) {
+            in_callback('Game not found');
+          } else if (xhr.status === 403) {
+            in_callback('Unauthorized');
+          } else if (xhr.status === 401) {
+            in_callback('Unauthorized');
+          } else {
+            in_callback('Unexpected error is unexpected');
+          }
+        });
+        xhr.addEventListener('error', function (in_event) {
+          in_callback('Unexpected error is unexpected');
+        });
+        xhr.addEventListener('abort', function (in_event) {
+          in_callback('Unexpected error is unexpected');
+        });
+        xhr.setRequestHeader('Content-Type', 'application/json');
+        var credentials = {
+          username : in_username,
+          password : in_password
+        };
+        var data = {
+          gameId : in_gameId,
+          password : in_gamePassword,
+          credentials : credentials
+        }
+        xhr.send(JSON.stringify(data));
+      };
+
+      var fetchGame = function (in_container, in_gameId, in_username, in_password, in_callback) {
+        var xhr = new XMLHttpRequest();
+        xhr.open('PUT', window.location + '/game/' + in_gameId);
+        xhr.addEventListener('load', function (in_event) {
+          if (xhr.status === 200) {
+            in_callback(false, JSON.parse(xhr.response));
+          } else if (xhr.status === 404) {
+            uiError(in_container, 'Game not found', function () {
+              in_callback(true);
+            });
+          } else if (xhr.status === 403) {
+            uiError(in_container, 'Unauthorized', function () {
+              in_callback(true);
+            });
+          } else if (xhr.status === 401) {
+            uiError(in_container, 'Unauthorized', function () {
+              in_callback(true);
+            });
+          } else {
+            uiError(in_container, 'Unexpected error is unexpected', function () {
+              in_callback(true);
+            });
+          }
+        });
+        xhr.addEventListener('error', function (in_event) {
+          uiError(in_container, 'Unexpected error is unexpected', function () {
+            in_callback(true);
+          });
+        });
+        xhr.addEventListener('abort', function (in_event) {
+          uiError(in_container, 'Unexpected error is unexpected', function () {
+            in_callback(true);
+          });
+        });
+        xhr.setRequestHeader('Content-Type', 'application/json');
+        var credentials = {
+          username : in_username,
+          password : in_password
+        };
+        xhr.send(JSON.stringify(credentials));
+      };
+
+      var createGame = function (in_container, in_gameId, in_gamePassword, in_username, in_password, in_callback) {
+        var xhr = new XMLHttpRequest();
+        xhr.open('POST', window.location + '/game/');
+        xhr.addEventListener('load', function (in_event) {
+          if (xhr.status === 200) {
+            in_callback(false);
+          } else if (xhr.status === 403) {
+            uiError(in_container, 'Unauthorized', function () {
+              in_callback(true);
+            });
+          } else if (xhr.status === 401) {
+            uiError(in_container, 'Unauthorized', function () {
+              in_callback(true);
+            });
+          } else {
+            uiError(in_container, 'Unexpected error is unexpected', function () {
+              in_callback(true);
+            });
+          }
+        });
+        xhr.addEventListener('error', function (in_event) {
+          uiError(in_container, 'Unexpected error is unexpected', function () {
+            in_callback(true);
+          });
+        });
+        xhr.addEventListener('abort', function (in_event) {
+          uiError(in_container, 'Unexpected error is unexpected', function () {
+            in_callback(true);
+          });
+        });
+        xhr.setRequestHeader('Content-Type', 'application/json');
+        var credentials = {
+          username : in_username,
+          password : in_password
+        };
+        var data = {
+          gameId : in_gameId,
+          gamePassword : in_gamePassword,
+          credentials : credentials
+        };
+        xhr.send(JSON.stringify(data));
+      };
+
+      var startGame = function (in_container, in_gameId, in_username, in_password, in_callback) {
+        var xhr = new XMLHttpRequest();
+        xhr.open('PUT', window.location + '/game/' + in_gameId + '/start');
+        xhr.addEventListener('load', function (in_event) {
+          if (xhr.status === 200) {
+            in_callback(false);
+          } else if (xhr.status === 404) {
+            uiError(in_container, 'Game not found', function () {
+              in_callback(true);
+            });
+          } else if (xhr.status === 403) {
+            uiError(in_container, 'Unauthorized', function () {
+              in_callback(true);
+            });
+          } else if (xhr.status === 401) {
+            uiError(in_container, 'Unauthorized', function () {
+              in_callback(true);
+            });
+          } else {
+            uiError(in_container, 'Expected error is unexpected', function () {
+              in_callback(true);
+            });
+          }
+        });
+        xhr.addEventListener('error', function (in_event) {
+          uiError(in_container, 'Expected error is unexpected', function () {
+            in_callback(true);
+          });
+        });
+        xhr.addEventListener('abort', function (in_event) {
+          uiError(in_container, 'Expected error is unexpected', function () {
+            in_callback(true);
+          });
+        });
+        xhr.setRequestHeader('Content-Type', 'application/json');
+        var credentials = {
+          username : in_username,
+          password : in_password
+        };
+        xhr.send(JSON.stringify(credentials));
+      };
+
+      var advanceGame = function (in_container, in_gameId, in_username, in_password, in_callback) {
+        var xhr = new XMLHttpRequest();
+        xhr.open('PUT', window.location + '/game/' + in_gameId + '/advance');
+        xhr.addEventListener('load', function (in_event) {
+          if (xhr.status === 200) {
+            in_callback(false);
+          } else if (xhr.status === 404) {
+            uiError(in_container, 'Game not found', function () {
+              in_callback(true);
+            });
+          } else if (xhr.status === 403) {
+            uiError(in_container, 'Unauthorized', function () {
+              in_callback(true);
+            });
+          } else if (xhr.status === 401) {
+            uiError(in_container, 'Unauthorized', function () {
+              in_callback(true);
+            });
+          } else {
+            uiError(in_container, 'Expected error is unexpected', function () {
+              in_callback(true);
+            });
+          }
+        });
+        xhr.addEventListener('error', function (in_event) {
+          uiError(in_container, 'Expected error is unexpected', function () {
+            in_callback(true);
+          });
+        });
+        xhr.addEventListener('abort', function (in_event) {
+          uiError(in_container, 'Expected error is unexpected', function () {
+            in_callback(true);
+          });
+        });
+        xhr.setRequestHeader('Content-Type', 'application/json');
+        var credentials = {
+          username : in_username,
+          password : in_password
+        };
+        xhr.send(JSON.stringify(credentials));
+      };
+
+      var destroyGame = function (in_container, in_gameId, in_username, in_password, in_callback) {
+        var xhr = new XMLHttpRequest();
+        xhr.open('DELETE', window.location + '/game/' + in_gameId);
+        xhr.addEventListener('load', function (in_event) {
+          if (xhr.status === 200) {
+            in_callback(false);
+          } else if (xhr.status === 404) {
+            uiError(in_container, 'Game not found', function () {
+              in_callback(true);
+            });
+          } else if (xhr.status === 403) {
+            uiError(in_container, 'Unauthorized', function () {
+              in_callback(true);
+            });
+          } else if (xhr.status === 401) {
+            uiError(in_container, 'Unauthorized', function () {
+              in_callback(true);
+            });
+          } else {
+            uiError(in_container, 'Unexpected error is unexpected', function () {
+              in_callback(true);
+            });
+          }
+        });
+        xhr.addEventListener('error', function (in_event) {
+          in_callback('Unexpected error is unexpected');
+        });
+        xhr.addEventListener('abort', function (in_event) {
+          in_callback('Unexpected error is unexpected');
+        });
+        xhr.setRequestHeader('Content-Type', 'application/json');
+        var credentials = {
+          username : in_username,
+          password : in_password
+        };
+        xhr.send(JSON.stringify(credentials));
+      };
+
+      var button = function (in_text, in_click) {
+        var div = document.createElement('div');
+        div.innerHTML = in_text;
+        div.style.width = '100%';
+        div.addEventListener('mouseenter', function () {
+          div.style.backgroundColor = 'green';
+        });
+        div.addEventListener('mouseleave', function () {
+          div.style.backgroundColor = '';
+        });
+        div.addEventListener('click', function () {
+          in_click();
+        });
+        return div;
+      };
+
+      var buttons = function (in_buttons) {
+        var ul = document.createElement('ul');
+        ul.style.display = 'table';
+        ul.style.tableLayout = 'fixed';
+        ul.style.width = '100%';
+        ul.style.height = '100%';
+        ul.style.padding = 0;
+        ul.style.margin = 0;
+        for (var i = 0; i < in_buttons.length; ++i) {
+          var thisButton = button(in_buttons[i].text, in_buttons[i].click);
+          thisButton.style.display = 'table-cell';
+          thisButton.style.verticalAlign = 'middle';
+          var li = document.createElement('li');
+          li.style.display = 'table-row';
+          li.style.textAlign = 'center';
+          li.appendChild(thisButton);
+          ul.appendChild(li);
+        }
+        return ul;
+      };
+
+      var uiError = function (in_container, in_description, in_callback) {
+        var ul = document.createElement('ul');
+        ul.style.display = 'table';
+        ul.style.tableLayout = 'fixed';
+        ul.style.width = '100%';
+        ul.style.height = '100%';
+        ul.style.padding = 0;
+        ul.style.margin = 0;
+        var li1 = document.createElement('li');
+        li1.style.display = 'table-row';
+        li1.style.textAlign = 'center';
+        var li2 = document.createElement('li');
+        li2.style.display = 'table-row';
+        li2.style.textAlign = 'center';
+        var li3 = document.createElement('li');
+        li3.style.display = 'table-row';
+        li3.style.textAlign = 'center';
+        var divError = document.createElement('div');
+        divError.innerHTML = 'A diplomatic error!';
+        divError.style.color = 'red';
+        divError.style.display = 'table-cell';
+        divError.style.verticalAlign = 'middle';
+        var divDescription = document.createElement('div');
+        divDescription.innerHTML = in_description;
+        divDescription.style.display = 'table-cell';
+        divDescription.style.verticalAlign = 'middle';
+        var divContinue = button('Understood ...', in_callback);
+        divContinue.style.display = 'table-cell';
+        divContinue.style.verticalAlign = 'middle';
+        li1.appendChild(divError);
+        li2.appendChild(divDescription);
+        li3.appendChild(divContinue);
+        ul.appendChild(li1);
+        ul.appendChild(li2);
+        ul.appendChild(li3);
+        clearContainer(in_container);
+        in_container.appendChild(ul);
+      };
+
+      window.onload = function () {
+        document.body.innerWidth = window.innerWidth;
+        document.body.innerHeight = window.innerHeight;
+        uiInitial(document.body);
+      };
+
+    </script>
+
+  </body>
+
+</html>
