@@ -13,61 +13,19 @@
       };
 
       var uiGameId = function (in_container, in_callback) {
-        var inputGameId = document.createElement('input');
-        var divLabel = document.createElement('div');
-        divLabel.innerHTML = 'Game name: ';
-        var form = document.createElement('form');
-        form.addEventListener('submit', function (in_event) {
-          var gameId = inputGameId.value;
-          in_event.preventDefault();
-          in_event.stopPropagation();
-          in_callback(gameId);
-          return false;
-        });
-        form.appendChild(divLabel);
-        form.appendChild(inputGameId);
-        clearContainer(in_container);
-        in_container.appendChild(form);
-        inputGameId.focus();
+        uiInput(in_container, 'Game name', 'text', in_callback);
+      };
+
+      var uiGamePassword = function (in_container, in_callback) {
+        uiInput(in_container, 'Game password', 'password', in_callback);
       };
 
       var uiPassword = function (in_container, in_callback) {
-        var inputPassword = document.createElement('input');
-        inputPassword.type = 'password';
-        var divLabel = document.createElement('div');
-        divLabel.innerHTML = 'Password: ';
-        var form = document.createElement('form');
-        form.addEventListener('submit', function (in_event) {
-          var password = inputPassword.value;
-          in_event.preventDefault();
-          in_event.stopPropagation();
-          in_callback(password);
-          return false;
-        });
-        form.appendChild(divLabel);
-        form.appendChild(inputPassword);
-        clearContainer(in_container);
-        in_container.appendChild(form);
-        inputPassword.focus();
+        uiInput(in_container, 'Password', 'password', in_callback);
       };
 
       var uiUsername = function (in_container, in_callback) {
-        var inputUsername = document.createElement('input');
-        var divLabel = document.createElement('div');
-        divLabel.innerHTML = 'Username: ';
-        var form = document.createElement('form');
-        form.addEventListener('submit', function (in_event) {
-          var username = inputUsername.value;
-          in_event.preventDefault();
-          in_event.stopPropagation();
-          in_callback(username);
-          return false;
-        });
-        form.appendChild(divLabel);
-        form.appendChild(inputUsername);
-        clearContainer(in_container);
-        in_container.appendChild(form);
-        inputUsername.focus();
+        uiInput(in_container, 'Username', 'text', in_callback);
       };
 
       var uiInitial = function (in_container) {
@@ -95,7 +53,7 @@
             text : 'Create',
             click : function () {
               uiGameId(in_container, function (in_gameId) {
-                uiPassword(in_container, function (in_gamePassword) {
+                uiGamePassword(in_container, function (in_gamePassword) {
                   uiUsername(in_container, function (in_username) {
                     uiPassword(in_container, function (in_password) {
                       createGame(in_container, in_gameId, in_gamePassword, in_username, in_password, function (in_error) {
@@ -188,7 +146,7 @@
             text : 'Join game',
             click : function () {
               uiGameId(in_container, function (in_gameId) {
-                uiPassword(in_container, function (in_gamePassword) {
+                uiGamePassword(in_container, function (in_gamePassword) {
                   uiUsername(in_container, function (in_username) {
                     uiPassword(in_container, function (in_password) {
                       joinGame(in_container, in_gameId, in_gamePassword, in_username, in_password, function (in_error) {
@@ -222,62 +180,86 @@
 
       var uiGameView = function (in_container, in_gameId, in_username, in_password, in_gameView) {
         clearContainer(in_container);
+        var ul = document.createElement('ul');
+        ul.style.display = 'table';
+        ul.style.tableLayout = 'fixed';
+        ul.style.width = '100%';
+        ul.style.height = '100%';
+        ul.style.padding = 0;
+        ul.style.margin = 0;
         if (in_gameView.tag === 'GameNotStarted') {
           var divLabel = document.createElement('div');
           divLabel.innerHTML = 'Game not started';
-          in_container.appendChild(divLabel);
+          var liLabel = document.createElement('li');
+          liLabel.appendChild(divLabel);
+          liLabel.style.display = 'table-row';
+          liLabel.style.textAlign = 'center';
+          ul.appendChild(liLabel);
         } else if (in_gameView.tag === 'GameStarted') {
           var metadata = in_gameView.components.metadata;
           var greatPowers = in_gameView.components.greatPowers;
           var occupation = in_gameView.components.occupation;
           var dislodgement = in_gameView.components.dislodgement;
           var control = in_gameView.components.control;
-          showMetadata(in_container, metadata);
-          showMap(in_container, metadata, greatPowers, occupation, dislodgement, control);
+          var resolutions = in_gameView.components.resolved;
+          console.log(metadata);
+          console.log(greatPowers);
+          console.log(occupation);
+          console.log(dislodgement);
+          console.log(control);
+          console.log(resolutions);
+          var divYear = document.createElement('div');
+          divYear.innerHTML = String(1900 + Number(metadata.turn));
+          var liYear = document.createElement('li');
+          liYear.appendChild(divYear);
+          liYear.style.display = 'table-row';
+          liYear.style.textAlign = 'center';
+          ul.appendChild(liYear);
+          var season;
+          if (metadata.round === 4) {
+            season = 'Winter';
+          } else if (metadata.round === 1 && metadata.round === 3) {
+            season = 'Fall';
+          } else {
+            season = 'Spring';
+          }
+          var divSeason = document.createElement('div');
+          divSeason.innerHTML = season;
+          var liSeason = document.createElement('li');
+          liSeason.appendChild(divSeason);
+          liSeason.style.display = 'table-row';
+          liSeason.style.textAlign = 'center';
+          ul.appendChild(liSeason);
+          var secondsRemaining = ((new Date().timeNow() / 1000) - metadata.elapsed)
+          var divTimeRemaining = document.createElement('div');
+          divTimeRemaining.innerHTML = secondsRemaining + ' seconds remaining.'
+          var liTimeRemaining = document.createElement('li');
+          liTimeRemaining.appendChild(divTimeRemaining);
+          liTimeRemaining.style.display = 'table-row';
+          liTimeRemaining.style.textAlign = 'center';
+          ul.appendChild(liTimeRemaining);
+          var divGreatPowers = document.createElement('div');
+          divGreatPowers.innerHTML = greatPowers.join(', ');
+          var liGreatPowers = document.createElement('li');
+          liGreatPowers.appendChild(divGreatPowers);
+          liGreatPowers.style.display = 'table-row';
+          liGreatPowers.style.textAlign = 'center';
+          ul.appendChild(liGreatPowers);
+          //showMap(in_container, occupation, dislodgement, control);
         } else {
           var divLabel = document.createElement('div');
           divLabel.innerHTML = 'Unknown game state is unknown';
-          in_container.appendChild(divLabel);
+          var liLabel = document.createElement('li');
+          liLabel.appendChild(divLabel);
+          ul.appendChild(liLabel);
         }
-        var divRefresh = document.createElement('div');
-        divRefresh.innerHTML = 'Refresh';
-        divRefresh.style.width = '100%';
-        divRefresh.addEventListener('mouseenter', function () {
-          divRefresh.style.backgroundColor = 'green';
-        });
-        divRefresh.addEventListener('mouseleave', function () {
-          divRefresh.style.backgroundColor = '';
-        });
-        divRefresh.addEventListener('click', function () {
+        var divRefresh = button('Refresh', function () {
           uiPlayGame(in_container, in_gameId, in_username, in_password);
         });
-        in_container.appendChild(divRefresh);
-      };
-
-      var showMetadata = function (in_container, in_metadata) {
-        var divYear = document.createElement('div');
-        divYear.innerHTML = String(1900 + Number(in_metadata.turn))
-        var divSeason = document.createElement('div');
-        var round = Number(in_metadata.round)
-        var season;
-        if (round === 4) {
-          season = 'Winter';
-        } else if (round < 2) {
-          season = 'Spring';
-        } else {
-          season = 'Fall';
-        }
-        divSeason.innerHTML = season;
-        var divRetreat = document.createElement('div');
-        if (round == 1 || round === 3) {
-          divRetreat.innerHTML = 'Retreat';
-        }
-        var divResolved = document.createElement('div');
-        var divTimeRemaining = 
-        in_container.appendChild(divYear);
-        in_container.appendChild(divSeason);
-        in_container.appendChild(divRetreat);
-        in_container.appendChild(divResolved);
+        var liRefresh = document.createElement('li');
+        liRefresh.appendChild(divRefresh);
+        ul.appendChild(liRefresh);
+        in_container.appendChild(ul);
       };
 
       var joinGame = function (in_container, in_gameId, in_gamePassword, in_username, in_password, in_callback) {
@@ -526,11 +508,13 @@
         var div = document.createElement('div');
         div.innerHTML = in_text;
         div.style.width = '100%';
+        div.style.backgroundColor = 'rgba(255,255,255,1)';
+        div.style.padding = '10px 10px 10px 10px';
         div.addEventListener('mouseenter', function () {
-          div.style.backgroundColor = 'green';
+          div.style.backgroundColor = 'rgba(0,0,0,0.2)';
         });
         div.addEventListener('mouseleave', function () {
-          div.style.backgroundColor = '';
+          div.style.backgroundColor = 'rgba(255,255,255,1)';
         });
         div.addEventListener('click', function () {
           in_click();
@@ -559,6 +543,45 @@
         return ul;
       };
 
+      var uiInput = function (in_container, in_label, in_type, in_callback) {
+        var ul = document.createElement('ul');
+        ul.style.display = 'table';
+        ul.style.tableLayout = 'fixed';
+        ul.style.width = '100%';
+        ul.style.height = '100%';
+        ul.style.padding = 0;
+        ul.style.margin = 0;
+        var label = document.createElement('div');
+        label.innerHTML = in_label;
+        label.style.display = 'table-cell';
+        label.style.verticalAlign = 'middle';
+        var li1 = document.createElement('li');
+        li1.style.display = 'table-row';
+        li1.style.textAlign = 'center';
+        li1.appendChild(label);
+        ul.appendChild(li1);
+        var input = document.createElement('input');
+        input.type = in_type;
+        input.style.display = 'table-cell';
+        input.style.verticalAlign = 'middle';
+        var li2 = document.createElement('li');
+        li2.style.display = 'table-row';
+        li2.style.textAlign = 'center';
+        li2.appendChild(input);
+        ul.appendChild(li2);
+        var form = document.createElement('form');
+        form.appendChild(ul);
+        form.addEventListener('submit', function (in_event) {
+          in_callback(input.value);
+          in_event.preventDefault();
+          in_event.stopPropagation();
+          return false;
+        });
+        clearContainer(in_container);
+        in_container.appendChild(form);
+        input.focus();
+      };
+
       var uiError = function (in_container, in_description, in_callback) {
         var ul = document.createElement('ul');
         ul.style.display = 'table';
@@ -585,7 +608,7 @@
         divDescription.innerHTML = in_description;
         divDescription.style.display = 'table-cell';
         divDescription.style.verticalAlign = 'middle';
-        var divContinue = button('Understood ...', in_callback);
+        var divContinue = button('I understand ...', in_callback);
         divContinue.style.display = 'table-cell';
         divContinue.style.verticalAlign = 'middle';
         li1.appendChild(divError);
@@ -605,7 +628,6 @@
       };
 
     </script>
-
   </body>
 
 </html>
