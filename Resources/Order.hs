@@ -75,13 +75,13 @@ resource = mkResourceId
         
         modifier :: SomeGame -> GameState -> GameState
         modifier (SomeGame x) state = case state of
-            GameNotStarted y duration -> GameNotStarted y duration -- Impossible; should not have this case...
-            GameStarted m _ resolved duration elapsed -> GameStarted m (SomeGame x) resolved duration elapsed
+            GameNotStarted y duration duration' -> GameNotStarted y duration duration' -- Impossible; should not have this case...
+            GameStarted m _ resolved duration duration' elapsed -> GameStarted m (SomeGame x) resolved duration duration' elapsed
 
         issueOrders' :: GameStateView -> ExceptT (Reason IssueOrdersError) (ReaderT GameId Server) SomeGame
         issueOrders' gameStateView = case gameStateView of
             GameNotStartedView -> throwE (domainReason IssueOrderGameNotStarted)
-            GameStartedView greatPower (SomeGame someGame) _ _ _ -> case (someGame, issuedOrders) of
+            GameStartedView greatPower (SomeGame someGame) _ _ _ _ -> case (someGame, issuedOrders) of
                 (TypicalGame TypicalRoundOne Unresolved x y z, Typical os) -> issueOrders'' greatPower os someGame
                 (RetreatGame RetreatRoundOne Unresolved _ _ _ _ _, Retreat os) -> issueOrders'' greatPower os someGame
                 (TypicalGame TypicalRoundTwo Unresolved x y z, Typical os) -> issueOrders'' greatPower os someGame

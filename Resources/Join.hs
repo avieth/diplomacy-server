@@ -70,15 +70,15 @@ resource = mkResourceId
 
 registerUser :: Credentials -> GameState -> Either JoinGameError GameState
 registerUser credentials gameState = case gameState of
-    GameNotStarted map duration -> case M.lookup uname map of
+    GameNotStarted map duration duration' -> case M.lookup uname map of
         Nothing -> 
             if M.size map == 7
             then Left GameFull
-            else Right (GameNotStarted (M.insert uname userData map) duration)
+            else Right (GameNotStarted (M.insert uname userData map) duration duration')
           where
             userData = UserData pwd (FC.Constant ())
         Just _ -> Left UsernameTaken
-    GameStarted _ _ _ _ _ -> Left GameAlreadyStarted
+    GameStarted _ _ _ _ _ _ -> Left GameAlreadyStarted
   where
     uname = Credentials.username credentials
     pwd = Credentials.password credentials

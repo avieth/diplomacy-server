@@ -61,11 +61,11 @@ resource = mkResourceId
 
     modifier :: GameState -> ExceptT (Reason AdvanceError) (ReaderT GameId Server) GameState
     modifier gameState = case gameState of
-        GameNotStarted _ _ -> throwE (domainReason AdvanceGameNotStarted)
-        GameStarted m someGame someResolved duration elapsed -> do
+        GameNotStarted _ _ _ -> throwE (domainReason AdvanceGameNotStarted)
+        GameStarted m someGame someResolved duration duration' elapsed -> do
             state <- SC.get
             let (nextGame, resolved) = advance someGame
-            return (GameStarted m nextGame (Just resolved) duration (currentTime state))
+            return (GameStarted m nextGame (Just resolved) duration duration' (currentTime state))
 
 -- | Advance a game, resolving and then continuing, so that we also go from
 --   Unresolved to Unresolved. Retreat and Adjust phases in which there is

@@ -102,13 +102,17 @@ advanceDaemon tvar = do
         -> ([GameId], M.Map GameId (Password, GameState))
         -> ([GameId], M.Map GameId (Password, GameState))
     advanceGameFold t gameId (pwd, gameState) (ids, out) = case gameState of
-        GameStarted m someGame resolved duration elapsed ->
+        GameStarted m (SomeGame game) resolved duration duration' elapsed ->
             let Elapsed t' = t - elapsed 
-                (duration', _) = fromSeconds t'
-            in  if duration' > duration
-                then let (someGame', someResolvedOrders) = Advance.advance someGame
-                     in  (gameId : ids, M.insert gameId (pwd, GameStarted m someGame' (Just someResolvedOrders) duration t) out)
-                else (ids, M.insert gameId (pwd, GameStarted m someGame resolved duration elapsed) out)
+                (observedDuration, _) = fromSeconds t'
+                thresholdDuration = case game of
+                    TypicalGame _ _ _ _ _ -> duration
+                    RetreatGame _ _ _ _ _ _ _ -> duration'
+                    AdjustGame _ _ _ _ _ -> duration'
+            in  if observedDuration > thresholdDuration
+                then let (someGame', someResolvedOrders) = Advance.advance (SomeGame game)
+                     in  (gameId : ids, M.insert gameId (pwd, GameStarted m someGame' (Just someResolvedOrders) duration duration' t) out)
+                else (ids, M.insert gameId (pwd, GameStarted m (SomeGame game) resolved duration duration' elapsed) out)
         _ -> (ids, M.insert gameId (pwd, gameState) out)
 
 api = [(mkVersion 1 0 0, Some1 router)]

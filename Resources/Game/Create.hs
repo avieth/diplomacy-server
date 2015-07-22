@@ -41,6 +41,9 @@ data CreateGameInput = CreateGameInput {
     , credentials :: Credentials
     -- ^ Administrator credentials
     , gameDuration :: Maybe Int
+    -- ^ Duration of typical phases.
+    , gameSecondDuration :: Maybe Int
+    -- ^ Duration of adjust and retreat phases.
     }
 
 deriving instance Generic CreateGameInput
@@ -61,13 +64,13 @@ instance ToJSON CreateGameOutput
 instance JSONSchema CreateGameOutput where
     schema = gSchema
 
-createGame :: GameId -> Password -> Duration -> Server CreateGameOutput
-createGame gameId password duration = do
+createGame :: GameId -> Password -> Duration -> Duration -> Server CreateGameOutput
+createGame gameId password duration duration' = do
     state <- S.get
     case M.member gameId (games state) of
         True -> return $ NameAlreadyTaken
         False -> do
-            let gameState = GameNotStarted M.empty duration
+            let gameState = GameNotStarted M.empty duration duration'
             let nextState = state { games = M.insert gameId (password, gameState) (games state) }
             S.put nextState
             return GameCreated

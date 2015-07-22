@@ -86,12 +86,12 @@ resource = mkResourceId
 --   whatever.
 startGameState :: Elapsed -> Stream.Stream Double -> GameState -> Either StartGameError GameState
 startGameState t randomDoubles game = case game of
-    GameNotStarted map duration ->
+    GameNotStarted map duration duration' ->
         if notEnoughPlayers
         then Left NotEnoughPlayers
         else if tooManyPlayers
         then Left TooManyPlayers
-        else Right (GameStarted map' (SomeGame newGame) Nothing duration t)
+        else Right (GameStarted map' (SomeGame newGame) Nothing duration duration' t)
       where
         registered :: [(Username, Password)]
         registered = fmap (\(x, y) -> (x, UD.password y)) (M.toList map)
@@ -113,7 +113,7 @@ startGameState t randomDoubles game = case game of
         makeUserData :: ((Username, Password), S.Set GreatPower) -> (Username, UserData S.Set)
         makeUserData ((u, p), s) = (u, UserData p s)
         map' = M.fromList (fmap makeUserData assignments)
-    GameStarted _ _ _ _ _ -> Left GameAlreadyStarted
+    GameStarted _ _ _ _ _ _ -> Left GameAlreadyStarted
 
 newtype StartGameInput = StartGameInput Credentials
 

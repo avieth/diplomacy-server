@@ -64,6 +64,7 @@ data GameState where
     GameNotStarted
         :: M.Map Username (UserData (Constant ()))
         -> Duration
+        -> Duration
         -> GameState
 
     GameStarted
@@ -99,6 +100,7 @@ data GameStateView where
         -> SomeGame
         -> Maybe SomeResolvedOrders
         -> Duration
+        -> Duration
         -> Elapsed
         -> GameStateView
 
@@ -107,7 +109,7 @@ data GameStateView where
 instance Show GameStateView where
     show gameStateView = case gameStateView of
         GameNotStartedView -> "Game not started"
-        GameStartedView greatPowers (SomeGame game) someResolved duration elapsed ->
+        GameStartedView greatPowers (SomeGame game) someResolved duration duration' elapsed ->
             concat [
               show greatPowers
             , "\n"
@@ -129,7 +131,7 @@ instance Show GameStateView where
 instance ToJSON GameStateView where
     toJSON gameStateView = case gameStateView of
         GameNotStartedView -> object ["tag" .= ("GameNotStarted" :: T.Text)]
-        GameStartedView greatPowers (SomeGame game) maybeResolved duration elapsed -> object [
+        GameStartedView greatPowers (SomeGame game) maybeResolved duration duration' elapsed -> object [
               "tag" .= ("GameStarted" :: T.Text)
             , "components" .= object [
                 "metadata" .= object [
@@ -137,6 +139,8 @@ instance ToJSON GameStateView where
                 , "round" .= round
                 , "durationHours" .= hours
                 , "durationMinutes" .= minutes
+                , "secondDurationHours" .= secondHours
+                , "secondDurationMinutes" .= secondMinutes
                 , "elapsed" .= seconds
                 ]
               -- We throw our GreatPower newtype over the
@@ -163,6 +167,8 @@ instance ToJSON GameStateView where
             -- seconds is an Int64 giving unix time when the game was last
             -- advanced (or started, in case it's round 1 turn 1).
             Elapsed (Seconds seconds) = elapsed
+            Hours secondHours = durationHours duration'
+            Minutes secondMinutes = durationMinutes duration'
 
             -- The third component is the order object, but due to my own
             -- personal lethargy I have decided to dump it to T.Text via
@@ -295,6 +301,8 @@ instance JSONSchema GameStateView where
                 , Field "round" True (Schema.Number (Bound (Just 0) (Just 4)))
                 , Field "durationHours" True (Schema.Number (Bound (Just 0) Nothing))
                 , Field "durationMinutes" True (Schema.Number (Bound (Just 0) Nothing))
+                , Field "secondDurationHours" True (Schema.Number (Bound (Just 0) Nothing))
+                , Field "secondDurationMinutes" True (Schema.Number (Bound (Just 0) Nothing))
                 , Field "elapsed" True (Schema.Number (Bound (Just 0) Nothing))
                 ]
             greatPowers = Schema.Array (LengthBound (Just 1) (Just 3)) True (Value (LengthBound Nothing Nothing))
@@ -311,16 +319,16 @@ instance JSONSchema GameStateView where
 --   Credentials do not match anyone.
 gameStateMatchCredentials :: Credentials -> GameState -> Maybe GameStateView
 gameStateMatchCredentials creds gameState = case gameState of
-    GameNotStarted map _ -> case M.lookup uname map of
+    GameNotStarted map _ _ -> case M.lookup uname map of
         Nothing -> Nothing
         Just ud -> case pwd == UD.password ud of
             False -> Nothing
             True -> Just GameNotStartedView
-    GameStarted map someGame someResolved duration elapsed -> case M.lookup uname map of
+    GameStarted map someGame someResolved duration duration' elapsed -> case M.lookup uname map of
         Nothing -> Nothing
         Just ud -> case pwd == UD.password ud of
             False -> Nothing
-            True -> Just (GameStartedView (UD.greatPower ud) someGame someResolved duration elapsed)
+            True -> Just (GameStartedView (UD.greatPower ud) someGame someResolved duration duration' elapsed)
   where
     uname = Cred.username creds
     pwd = Cred.password creds

@@ -72,12 +72,13 @@ resource = mkResourceReader
     create :: Handler Server
     create = secureHandler $ mkInputHandler (jsonO . jsonE . jsonI) $ doCreate
     doCreate :: CreateGameInput -> ExceptT (Reason Void) Server CreateGameOutput
-    doCreate input = withAdminCredentials creds (lift (createGame gameId password duration))
+    doCreate input = withAdminCredentials creds (lift (createGame gameId password duration duration'))
       where
         creds = Create.credentials input
         gameId = Create.gameId input
         password = Create.gamePassword input
         duration = maybe (makeDuration 15) makeDuration (Create.gameDuration input)
+        duration' = maybe (makeDuration 5) makeDuration (Create.gameSecondDuration input)
         makeDuration x = Duration (fromIntegral 0) (fromIntegral x) (fromIntegral 0) (fromIntegral 0)
 
     remove :: Handler (ReaderT GameId Server)
