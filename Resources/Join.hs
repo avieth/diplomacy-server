@@ -78,7 +78,7 @@ registerUser credentials gameState = case gameState of
           where
             userData = UserData pwd (FC.Constant ())
         Just _ -> Left UsernameTaken
-    GameStarted _ _ _ _ -> Left GameAlreadyStarted
+    GameStarted _ _ _ _ _ -> Left GameAlreadyStarted
   where
     uname = Credentials.username credentials
     pwd = Credentials.password credentials

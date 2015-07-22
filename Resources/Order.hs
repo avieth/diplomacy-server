@@ -76,18 +76,18 @@ resource = mkResourceId
         modifier :: SomeGame -> GameState -> GameState
         modifier (SomeGame x) state = case state of
             GameNotStarted y duration -> GameNotStarted y duration -- Impossible; should not have this case...
-            GameStarted m _ duration elapsed -> GameStarted m (SomeGame x) duration elapsed
+            GameStarted m _ resolved duration elapsed -> GameStarted m (SomeGame x) resolved duration elapsed
 
         issueOrders' :: GameStateView -> ExceptT (Reason IssueOrdersError) (ReaderT GameId Server) SomeGame
         issueOrders' gameStateView = case gameStateView of
             GameNotStartedView -> throwE (domainReason IssueOrderGameNotStarted)
-            GameStartedView greatPower (SomeGame someGame) -> case (someGame, issuedOrders) of
+            GameStartedView greatPower (SomeGame someGame) _ _ _ -> case (someGame, issuedOrders) of
                 (TypicalGame TypicalRoundOne Unresolved x y z, Typical os) -> issueOrders'' greatPower os someGame
                 (RetreatGame RetreatRoundOne Unresolved _ _ _ _ _, Retreat os) -> issueOrders'' greatPower os someGame
                 (TypicalGame TypicalRoundTwo Unresolved x y z, Typical os) -> issueOrders'' greatPower os someGame
                 (RetreatGame RetreatRoundTwo Unresolved _ _ _ _ _, Retreat os) -> issueOrders'' greatPower os someGame
                 (AdjustGame AdjustRound Unresolved _ _ _, Adjust os) -> issueOrders'' greatPower os someGame
-                _ -> throwE (domainReason IssueOrderInvalid)
+                _ -> throwE (domainReason (IssueOrderInvalid "Wrong phase"))
 
         issueOrders''
             :: S.Set DGP.GreatPower
@@ -103,7 +103,7 @@ resource = mkResourceId
             issueOneOrder (GreatPower greatPower, order) rest game = case (S.member greatPower greatPowers, order) of
                 (False, _) -> throwE NotAllowed
                 (True, Order x) -> case issueOrder (align x greatPower) game of
-                    Left _ -> throwE (domainReason IssueOrderInvalid)
+                    Left e -> throwE (domainReason (IssueOrderInvalid (show e)))
                     Right x -> rest x
 
 data IssuedOrders where
@@ -139,7 +139,7 @@ instance ToJSON IssueOrdersOutput
 instance JSONSchema IssueOrdersOutput where
     schema = gSchema
 
-data IssueOrdersError = IssueOrderInvalid | IssueOrderGameNotStarted
+data IssueOrdersError = IssueOrderInvalid String | IssueOrderGameNotStarted
 
 instance ToResponseCode IssueOrdersError where
     toResponseCode _ = 403

@@ -25,6 +25,7 @@ module Types.Order (
     , parseOrderAdjust
 
     , printOrder
+    , printObject
 
     ) where
 
@@ -96,9 +97,9 @@ printObject subject object = case object of
     SupportObject subj pt ->
         if subjectProvinceTarget subj == pt
         then T.concat ["S ", printSubject subj]
-        else T.concat ["S ", printSubject subj, " ", printProvinceTarget pt]
+        else T.concat ["S ", printSubject subj, " - ", printProvinceTarget pt]
     ConvoyObject subj pt ->
-        T.concat ["C ", printSubject subj, " ", printProvinceTarget pt]
+        T.concat ["C ", printSubject subj, " - ", printProvinceTarget pt]
     SurrenderObject -> "Surrender"
     WithdrawObject pt ->
         T.concat ["- ", printProvinceTarget pt]

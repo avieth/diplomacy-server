@@ -10,6 +10,7 @@ Portability : non-portable (GHC only)
 
 {-# LANGUAGE AutoDeriveTypeable #-}
 {-# LANGUAGE FlexibleContexts #-}
+{-# LANGUAGE RankNTypes #-}
 
 module Types.Server (
 
@@ -31,6 +32,7 @@ import Control.Monad.State.Class as SC
 import Control.Concurrent.STM
 import Control.Concurrent.STM.TVar
 import Data.Stream as Stream
+import Data.ByteString as BS
 import qualified Data.Map as M
 import Data.Functor.Identity
 import Data.Hourglass
@@ -46,6 +48,7 @@ data ServerState = ServerState {
     , games :: M.Map GameId (Password, GameState)
     , currentTime :: Elapsed
     , randomDoubles :: Stream.Stream Double
+    , clientHtml :: ByteString
     }
 
 type Server = StateT ServerState Identity
@@ -97,9 +100,10 @@ serverState adminUsername adminPassword = do
     g <- getStdGen
     let ds = unfold random g :: Stream.Stream Double
     t <- timeCurrent
-    return $ ServerState (Credentials adminUsername adminPassword) games t ds
+    bs <- BS.readFile "client.html"
+    return $ ServerState (Credentials adminUsername adminPassword) games t ds bs
 
-runDiplomacyServer :: TVar ServerState -> (Server a -> IO a)
+runDiplomacyServer :: TVar ServerState -> (forall a . Server a -> IO a)
 runDiplomacyServer tvar m = do
     -- Always refurnish the state with random doubles.
     g <- getStdGen
@@ -107,6 +111,9 @@ runDiplomacyServer tvar m = do
     t <- timeCurrent
     atomically $ do
         state <- readTVar tvar
-        let (x, nextState) = runIdentity (runStateT m state)
-        writeTVar tvar (nextState { currentTime = t, randomDoubles = ds })
+        -- It's important to update the time and random doubles before we
+        -- run the term @m@.
+        let state' = state { currentTime = t, randomDoubles = ds }
+        let (x, nextState) = runIdentity (runStateT m state')
+        writeTVar tvar nextState
         return x

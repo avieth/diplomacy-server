@@ -29,6 +29,7 @@ import Rest.Resource as R
 import Types.Server
 import Types.GameId
 import Types.Credentials
+import Types.GameState
 import Resources.Game.Create as Create
 import Resources.Game.Remove as Remove
 
@@ -46,7 +47,11 @@ resource = mkResourceReader
     { R.name = "game"
     , R.schema = withListing () $ unnamedSingle GameId
     --, R.schema = withListing () $ named [("id", singleBy GameId)]
-    , R.get = Just get
+    -- We use update (PUT) where we really ought to use get (GET) because
+    -- there is a lot of resistance against including bodies in GET requests,
+    -- so much so that the W3C XMLHttpRequest NEVER includes a body in a
+    -- GET request.
+    , R.update = Just get
     -- TODO TBD listing doesn't work; unsupported route. Why?!?
     , R.list = const listing
     , R.create = Just create
@@ -55,9 +60,9 @@ resource = mkResourceReader
   where
 
     get :: Handler (ReaderT GameId Server)
-    get = secureHandler $ mkIdHandler (stringO . jsonE . jsonI) $ \credentials gameId -> doGet credentials gameId
-    doGet :: Credentials -> GameId -> ExceptT (Reason Void) (ReaderT GameId Server) String -- GameStateView
-    doGet credentials gameId = withUserCredentialsForGame credentials gameId (return . show)
+    get = secureHandler $ mkIdHandler (jsonO . jsonE . jsonI) $ \credentials gameId -> doGet credentials gameId
+    doGet :: Credentials -> GameId -> ExceptT (Reason Void) (ReaderT GameId Server) GameStateView
+    doGet credentials gameId = withUserCredentialsForGame credentials gameId return
 
     listing :: ListHandler Server
     listing = mkListing (stringO) $ \_ -> lift doListing

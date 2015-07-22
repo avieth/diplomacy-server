@@ -16,6 +16,7 @@ Portability : non-portable (GHC only)
 module Resources.Advance (
 
       resource
+    , advance
 
     ) where
 
@@ -25,6 +26,7 @@ import Control.Monad.Trans.Class
 import Control.Monad.Trans.Reader
 import Control.Monad.Trans.Except
 import Control.Monad.State.Class as SC
+import qualified Data.Map as M
 import Data.Aeson
 import Data.JSON.Schema
 import Rest
@@ -49,7 +51,7 @@ resource = mkResourceId
     doUpdate :: AdvanceInput -> ExceptT (Reason AdvanceError) (ReaderT GameId Server) AdvanceOutput
     doUpdate input = withAdminCredentials creds advanceGame
       where
-        creds = credentials input
+        AdvanceInput creds = input
 
     advanceGame :: ExceptT (Reason AdvanceError) (ReaderT GameId Server) AdvanceOutput
     advanceGame = do
@@ -60,18 +62,54 @@ resource = mkResourceId
     modifier :: GameState -> ExceptT (Reason AdvanceError) (ReaderT GameId Server) GameState
     modifier gameState = case gameState of
         GameNotStarted _ _ -> throwE (domainReason AdvanceGameNotStarted)
-        GameStarted m someGame duration elapsed -> do
+        GameStarted m someGame someResolved duration elapsed -> do
             state <- SC.get
-            return (GameStarted m (nextGame someGame) duration (currentTime state))
+            let (nextGame, resolved) = advance someGame
+            return (GameStarted m nextGame (Just resolved) duration (currentTime state))
 
-    nextGame :: SomeGame -> SomeGame
-    nextGame (SomeGame game) = case game of
-        TypicalGame _ Unresolved _ _ _ -> SomeGame $ resolve game
-        RetreatGame _ Unresolved _ _ _ _ _ -> SomeGame $ resolve game
-        AdjustGame _ Unresolved _ _ _ -> SomeGame $ resolve game
-        TypicalGame _ Resolved _ _ _ -> SomeGame $ continue game
-        RetreatGame _ Resolved _ _ _ _ _ -> SomeGame $ continue game
-        AdjustGame _ Resolved _ _ _ -> SomeGame $ continue game
+-- | Advance a game, resolving and then continuing, so that we also go from
+--   Unresolved to Unresolved. Retreat and Adjust phases in which there is
+--   nothing to do are skipped.
+advance :: SomeGame -> (SomeGame, SomeResolvedOrders)
+advance (SomeGame game) = case game of
+    TypicalGame TypicalRoundOne Unresolved _ _ _ ->
+        let resolved = resolve game
+            continued = continue resolved
+            resolvedOrders = gameZonedResolvedOrders resolved
+        in  case M.size (gameDislodged continued) of
+                -- Automatically skip retreat phases where nobody is
+                -- dislodged.
+                0 -> advance (SomeGame continued)
+                _ -> (SomeGame continued, SomeResolvedOrders resolvedOrders)
+    TypicalGame TypicalRoundTwo Unresolved _ _ _ ->
+        let resolved = resolve game
+            continued = continue resolved
+            resolvedOrders = gameZonedResolvedOrders resolved
+        in  case M.size (gameDislodged continued) of
+                -- Automatically skip retreat phases where nobody is
+                -- dislodged.
+                0 -> advance (SomeGame continued)
+                _ -> (SomeGame continued, SomeResolvedOrders resolvedOrders)
+    RetreatGame RetreatRoundOne Unresolved _ _ _ _ _ ->
+        let resolved = resolve game
+            continued = continue resolved
+            resolvedOrders = gameZonedResolvedOrders resolved
+        in  (SomeGame continued, SomeResolvedOrders resolvedOrders)
+    RetreatGame RetreatRoundTwo Unresolved _ _ _ _ _ ->
+        let resolved = resolve game
+            continued = continue resolved
+            resolvedOrders = gameZonedResolvedOrders resolved
+            defecits = fmap ((flip gameSupplyCentreDefecit) continued) [minBound..maxBound]
+        in  if all (== 0) defecits
+            -- Automatically skip adjust phases where nobody has a defecit,
+            -- positive or negative.
+            then advance (SomeGame continued)
+            else (SomeGame continued, SomeResolvedOrders resolvedOrders)
+    AdjustGame _ Unresolved _ _ _ ->
+        let resolved = resolve game
+            continued = continue resolved
+            resolvedOrders = gameZonedResolvedOrders resolved
+        in  (SomeGame continued, SomeResolvedOrders resolvedOrders)
 
 data AdvanceError = AdvanceGameNotStarted
 
@@ -85,9 +123,7 @@ instance ToJSON AdvanceError
 instance JSONSchema AdvanceError where
     schema = gSchema
 
-data AdvanceInput = AdvanceInput {
-      credentials :: Credentials
-    }
+newtype AdvanceInput = AdvanceInput Credentials
 
 deriving instance Generic AdvanceInput
 deriving instance Typeable AdvanceInput

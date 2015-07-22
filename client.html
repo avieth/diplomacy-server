@@ -20,6 +20,10 @@
         uiInput(in_container, 'Game password', 'password', in_callback);
       };
 
+      var uiGameDuration = function (in_container, in_callback) {
+        uiInput(in_container, 'Game period (in minutes)', 'text', in_callback);
+      };
+
       var uiPassword = function (in_container, in_callback) {
         uiInput(in_container, 'Password', 'password', in_callback);
       };
@@ -54,14 +58,16 @@
             click : function () {
               uiGameId(in_container, function (in_gameId) {
                 uiGamePassword(in_container, function (in_gamePassword) {
-                  uiUsername(in_container, function (in_username) {
-                    uiPassword(in_container, function (in_password) {
-                      createGame(in_container, in_gameId, in_gamePassword, in_username, in_password, function (in_error) {
-                        if (in_error) {
-                          uiInitial(in_container);
-                        } else {
-                          uiInitial(in_container);
-                        }
+                  uiGameDuration(in_container, function (in_gameDuration) {
+                    uiUsername(in_container, function (in_username) {
+                      uiPassword(in_container, function (in_password) {
+                        createGame(in_container, in_gameId, in_gamePassword, Number(in_gameDuration), in_username, in_password, function (in_error) {
+                          if (in_error) {
+                            uiInitial(in_container);
+                          } else {
+                            uiInitial(in_container);
+                          }
+                        });
                       });
                     });
                   });
@@ -199,7 +205,7 @@
           var metadata = in_gameView.components.metadata;
           var greatPowers = in_gameView.components.greatPowers;
           var occupation = in_gameView.components.occupation;
-          var dislodgement = in_gameView.components.dislodgement;
+          var dislodgement = in_gameView.components.dislodgement || {};
           var control = in_gameView.components.control;
           var resolutions = in_gameView.components.resolved;
           console.log(metadata);
@@ -216,12 +222,22 @@
           liYear.style.textAlign = 'center';
           ul.appendChild(liYear);
           var season;
+          var phase;
           if (metadata.round === 4) {
             season = 'Winter';
-          } else if (metadata.round === 1 && metadata.round === 3) {
+            phase = 'Adjust';
+          } else if (metadata.round === 3) {
             season = 'Fall';
-          } else {
+            phase = 'Retreat';
+          } else if (metadata.round === 2) {
+            season = 'Fall';
+            phase = 'Typical';
+          } else if (metadata.round === 1) {
             season = 'Spring';
+            phase = 'Retreat';
+          } else if (metadata.round === 0) {
+            season = 'Spring';
+            phase = 'Typical';
           }
           var divSeason = document.createElement('div');
           divSeason.innerHTML = season;
@@ -230,9 +246,20 @@
           liSeason.style.display = 'table-row';
           liSeason.style.textAlign = 'center';
           ul.appendChild(liSeason);
-          var secondsRemaining = ((new Date().timeNow() / 1000) - metadata.elapsed)
+          var divPhase = document.createElement('div');
+          divPhase.innerHTML = phase;
+          var liPhase = document.createElement('li');
+          liPhase.appendChild(divPhase);
+          liPhase.style.display = 'table-row';
+          liPhase.style.textAlign = 'center';
+          ul.appendChild(liPhase);
+          var secondsElapsed = ((new Date().getTime() / 1000) - metadata.elapsed)
+          var minutesElapsed = Math.round(secondsElapsed / 60);
+          var hoursElapsed = Math.round(minutesElapsed / 60);
+          var hoursRemaining = Math.max(0, metadata.durationHours - hoursElapsed);
+          var minutesRemaining = Math.max(0, metadata.durationMinutes - minutesElapsed);
           var divTimeRemaining = document.createElement('div');
-          divTimeRemaining.innerHTML = secondsRemaining + ' seconds remaining.'
+          divTimeRemaining.innerHTML = hoursRemaining + ':' + minutesRemaining + ' remaining';
           var liTimeRemaining = document.createElement('li');
           liTimeRemaining.appendChild(divTimeRemaining);
           liTimeRemaining.style.display = 'table-row';
@@ -245,7 +272,115 @@
           liGreatPowers.style.display = 'table-row';
           liGreatPowers.style.textAlign = 'center';
           ul.appendChild(liGreatPowers);
-          //showMap(in_container, occupation, dislodgement, control);
+
+          // Inputs for orders.
+          var orderForm = document.createElement('form');
+          orderForm.id = 'orderForm';
+          var ulOrderForm = document.createElement('ul');
+          ulOrderForm.style.display = 'table';
+          ulOrderForm.style.width = '100%';
+          ulOrderForm.style.tableLayout = 'fixed';
+          ulOrderForm.style.padding = 0;
+          ulOrderForm.style.margin = 0;
+          orderForm.appendChild(ulOrderForm);
+          // Identifying when we can give an order... for lack of any proper
+          // design in this client, we just check that the third component of
+          // an entry is not null, in which case its the current order, and we
+          // assume that this unit is under the user's control.
+          var orderEntries = [];
+          if (phase === 'Typical' || phase === 'Adjust') {
+            // TODO for adjust phase we must be clever about giving the order
+            // input: gives boxes for home supply centres, and a box for
+            // every unit the user owns.
+            for (var i in occupation) {
+              if (occupation[i][2]) {
+                var orderEntry = makeOrderEntry(i, occupation[i]);
+                orderEntries.push(orderEntry);
+                var li = document.createElement('li');
+                li.style.display = 'table-row';
+                li.style.textAlign = 'center';
+                li.appendChild(orderEntry);
+                ulOrderForm.appendChild(li);
+              }
+            }
+          } else {
+            for (var i in dislodgement) {
+              if (dislodgement[i][2]) {
+                var orderEntry = makeOrderEntry(i, dislodgement[i]);
+                orderEntries.push(orderEntry);
+                orderEntries.push(orderEntry);
+                var li = document.createElement('li');
+                li.style.display = 'table-row';
+                li.style.textAlign = 'center';
+                li.appendChild(orderEntry);
+                ulOrderForm.appendChild(li);
+              }
+            }
+          }
+          orderForm.addEventListener('submit', function (in_event) {
+            var orders = [];
+            for (var i in orderEntries) {
+              orders.push([orderEntries[i].greatPower, orderEntries[i].orderSubject + ' ' + orderEntries[i].orderObjectInput.value]);
+            }
+            submitOrders(in_container, in_gameId, in_username, in_password, phase, orders, function () {
+              uiPlayGame(in_container, in_gameId, in_username, in_password);
+            });
+            in_event.preventDefault();
+            in_event.stopPropagation();
+            return false;
+          });
+          var submitButton = document.createElement('input');
+          submitButton.type = 'submit';
+          submitButton.value = 'Issue orders'
+          orderForm.appendChild(submitButton);
+          ul.appendChild(orderForm);
+
+          var svgMap = window.svgMap
+          for (var i in svgMap.fleets) {
+            svgMap.removeChild(svgMap.fleets[i]);
+          }
+          for (var i in svgMap.armies) {
+            svgMap.removeChild(svgMap.armies[i]);
+          }
+          svgMap.fleets = [];
+          svgMap.armies = [];
+          for (var i in occupation) {
+            // Here we construct SVG elements for each unit on the board, and
+            // throw them into the map.
+            if (occupation[i][1] === 'F') {
+              svgMap.fleets.push(svgFleet(occupation[i][0], unitOccupationLocation(i)));
+            } else {
+              svgMap.armies.push(svgArmy(occupation[i][0], unitOccupationLocation(i)));
+            }
+          }
+          for (var i in dislodgement) {
+            // Just like occupation, except the units are offset slightly and
+            // drawn atop the occupier.
+            if (dislodgement[i][1] === 'F') {
+              svgMap.fleets.push(svgFleet(dislodgement[i][0], unitDislodgementLocation(i)));
+            } else {
+              svgMap.armies.push(svgArmy(dislodgement[i][0], unitDislodgementLocation(i)));
+            }
+          }
+          for (var i in svgMap.fleets) {
+            svgMap.appendChild(svgMap.fleets[i]);
+          }
+          for (var i in svgMap.armies) {
+            svgMap.appendChild(svgMap.armies[i]);
+          }
+          for (var i in control) {
+            // For control, we can just set all supply centre classes to their
+            // controlling nation, since control never reverts to Unowned.
+            // It's OK if there's no element; control is for all provinces, but
+            // we only SHOW control for supply centres.
+            var element = svgMap.getElementById('SC' + i);
+            if (element) {
+              element.children[0].setAttribute('class', control[i]);
+            }
+          }
+
+          svgMap.style.display = 'block';
+          ul.appendChild(svgMap);
         } else {
           var divLabel = document.createElement('div');
           divLabel.innerHTML = 'Unknown game state is unknown';
@@ -339,7 +474,7 @@
         xhr.send(JSON.stringify(credentials));
       };
 
-      var createGame = function (in_container, in_gameId, in_gamePassword, in_username, in_password, in_callback) {
+      var createGame = function (in_container, in_gameId, in_gamePassword, in_gameDuration, in_username, in_password, in_callback) {
         var xhr = new XMLHttpRequest();
         xhr.open('POST', window.location + '/game/');
         xhr.addEventListener('load', function (in_event) {
@@ -377,6 +512,7 @@
         var data = {
           gameId : in_gameId,
           gamePassword : in_gamePassword,
+          gameDuration : in_gameDuration,
           credentials : credentials
         };
         xhr.send(JSON.stringify(data));
@@ -504,6 +640,72 @@
         xhr.send(JSON.stringify(credentials));
       };
 
+      var submitOrders = function (in_container, in_gameId, in_username, in_password, in_phase, in_orders, in_callback) {
+        var xhr = new XMLHttpRequest();
+        xhr.open('PUT', window.location + '/game/' + in_gameId + '/order');
+        xhr.addEventListener('load', function (in_event) {
+          if (xhr.status === 200) {
+            in_callback(false);
+          } else if (xhr.status === 404) {
+            uiError(in_container, 'Game not found', function () {
+              in_callback(true);
+            });
+          } else if (xhr.status === 403) {
+            uiError(in_container, 'Unauthorized', function () {
+              in_callback(true);
+            });
+          } else if (xhr.status === 401) {
+            uiError(in_container, 'Unauthorized', function () {
+              in_callback(true);
+            });
+          } else {
+            uiError(in_container, 'Expected error is unexpected', function () {
+              in_callback(true);
+            });
+          }
+        });
+        xhr.addEventListener('error', function (in_event) {
+          uiError(in_container, 'Expected error is unexpected', function () {
+            in_callback(true);
+          });
+        });
+        xhr.addEventListener('abort', function (in_event) {
+          uiError(in_container, 'Expected error is unexpected', function () {
+            in_callback(true);
+          });
+        });
+        xhr.setRequestHeader('Content-Type', 'application/json');
+        var credentials = {
+          username : in_username,
+          password : in_password
+        };
+        var orders = {
+          tag : in_phase,
+          contents : in_orders
+        };
+        var data = {
+          orders : orders,
+          credentials : credentials
+        };
+        xhr.send(JSON.stringify(data));
+      };
+
+      var makeOrderEntry = function (in_provinceTarget, in_entry) {
+        var span = document.createElement('span');
+        span.greatPower = in_entry[0];
+        span.orderSubject = in_entry[1] + ' ' + in_provinceTarget;
+        span.orderSubjectLabel = document.createElement('span');
+        span.orderSubjectLabel.innerHTML = span.orderSubject;
+        span.appendChild(span.orderSubjectLabel);
+        span.orderObjectInput = document.createElement('input');
+        span.orderObjectInput.setAttribute('form', 'orderForm');
+        if (in_entry[2]) {
+          span.orderObjectInput.value = in_entry[2];
+        }
+        span.appendChild(span.orderObjectInput);
+        return span;
+      };
+
       var button = function (in_text, in_click) {
         var div = document.createElement('div');
         div.innerHTML = in_text;
@@ -621,13 +823,607 @@
         in_container.appendChild(ul);
       };
 
+      var svgArmy = function (in_greatPower, in_location) {
+        var g = document.createElementNS('http://www.w3.org/2000/svg', 'g');
+        var path1 = document.createElementNS('http://www.w3.org/2000/svg', 'path');
+        var path2 = document.createElementNS('http://www.w3.org/2000/svg', 'path');
+        var circle = document.createElementNS('http://www.w3.org/2000/svg', 'circle');
+        path1.setAttribute('d', 'M9,-6 L2,0 M9,6 L0,0');
+        path2.setAttribute('d', 'M-11,-6 v4 h17 a2,2 0,0 0 0,-4z');
+        circle.setAttribute('r', '6');
+        g.appendChild(path1);
+        g.appendChild(path2);
+        g.appendChild(circle);
+        g.setAttributeNS(null, 'class', in_greatPower);
+        var translation = 'translate(' + in_location.x + ',' + in_location.y + ')';
+        g.setAttribute('transform', translation);
+        return g;
+      };
+
+      var svgFleet = function (in_greatPower, in_location) {
+        var g = document.createElementNS('http://www.w3.org/2000/svg', 'g');
+        var polygon1 = document.createElementNS('http://www.w3.org/2000/svg', 'polygon');
+        var polygon2 = document.createElementNS('http://www.w3.org/2000/svg', 'polygon');
+        polygon1.setAttributeNS(null, 'points', '-2,-3 10,-3 -2,-13');
+        polygon2.setAttributeNS(null, 'points', '-12,-1 -6,5 6,5 12,-1');
+        g.appendChild(polygon1);
+        g.appendChild(polygon2);
+        g.setAttributeNS(null, 'class', in_greatPower);
+        var translation = 'translate(' + in_location.x + ',' + in_location.y + ')';
+        g.setAttributeNS(null, 'transform', translation);
+        return g;
+      };
+
+      var unitOccupationLocationMap = {
+        'Adriatic Sea' : { x : 296, y : 441 },
+        'Aegean Sea' : { x : 403, y : 524 },
+        'Albania' : { x : 339, y : 469 },
+        'Ankara' : { x : 500, y : 460 },
+        'Apulia' : { x : 302, y : 472 },
+        'Armenia' : { x : 576, y : 456 },
+        'Baltic Sea' : { x : 323, y : 250 },
+        'Barents Sea' : { x : 445, y : 41 },
+        'Belgium' : { x : 197, y : 317 },
+        'Berlin' : { x : 279, y : 283 },
+        'Black Sea' : { x : 484, y : 420 },
+        'Bohemia' : { x : 289, y : 336 },
+        'Brest' : { x : 125, y : 334 },
+        'Budapest' : { x : 353, y : 378 },
+        'Bulgaria' : { x : 395, y : 443 },
+        'Bulgaria EC' : { x : 410, y : 440 },
+        'Bulgaria SC' : { x : 399, y : 462 },
+        'Burgundy' : { x : 191, y : 360 },
+        'Clyde' : { x : 139, y : 188 },
+        'Constantinople' : { x : 439, y : 473 },
+        'Denmark' : { x : 256, y : 245 },
+        'Eastern Mediterranean' : { x : 474, y : 546 },
+        'Edinburgh' : { x : 157, y : 210 },
+        'English Channel' : { x : 119, y : 307 },
+        'Finland' : { x : 385, y : 143 },
+        'Galicia' : { x : 377, y : 343 },
+        'Gascony' : { x : 137, y : 388 },
+        'Greece' : { x : 366, y : 515 },
+        'Gulf of Lyon' : { x : 180, y : 444 },
+        'Gulf of Bothnia' : { x : 348, y : 199 },
+        'Heligoland Bight' : { x : 226, y : 252 },
+        'Holland' : { x : 205, y : 297 },
+        'Ionian Sea' : { x : 324, y : 540 },
+        'Irish Sea' : { x : 90, y : 276 },
+        'Kiel' : { x : 243, y : 295 },
+        'Liverpool' : { x : 142, y : 241 },
+        'Livonia' : { x : 382, y : 254 },
+        'London' : { x : 162, y : 281 },
+        'Marseilles' : { x : 184, y : 402 },
+        'Mid-Atlantic Ocean' : { x : 23, y : 355 },
+        'Moscow' : { x : 505, y : 226 },
+        'Munich' : { x : 243, y : 347 },
+        'Naples' : { x : 299, y : 505 },
+        'North Atlantic Ocean' : { x : 65, y : 140 },
+        'North Africa' : { x : 100, y : 536 },
+        'North Sea' : { x : 204, y : 215 },
+        'Norway' : { x : 264, y : 160 },
+        'Norwegian Sea' : { x : 220, y : 90 },
+        'Paris' : { x : 162, y : 346 },
+        'Picardy' : { x : 168, y : 319 },
+        'Piedmont' : { x : 220, y : 399 },
+        'Portugal' : { x : 34, y : 417 },
+        'Prussia' : { x : 315, y : 283 },
+        'Rome' : { x : 264, y : 452 },
+        'Ruhr' : { x : 223, y : 320 },
+        'Rumania' : { x : 415, y : 405 },
+        'Serbia' : { x : 351, y : 438 },
+        'Sevastopol' : { x : 515, y : 330 },
+        'Silesia' : { x : 304, y : 314 },
+        'Skagerrak' : { x : 260, y : 212 },
+        'Smyrna' : { x : 490, y : 505 },
+        'Spain' : { x : 64, y : 439 },
+        'Spain NC' : { x : 80, y : 404 },
+        'Spain SC' : { x : 52, y : 475 },
+        'St. Petersburg' : { x : 500, y : 140 },
+        'St. Petersburg NC' : { x : 472, y : 122 },
+        'St. Petersburg SC' : { x : 418, y : 205 },
+        'Sweden' : { x : 315, y : 140 },
+        'Syria' : { x : 570, y : 520 },
+        'Trieste' : { x : 305, y : 412 },
+        'Tunis' : { x : 212, y : 542 },
+        'Tuscany' : { x : 247, y : 430 },
+        'Tyrolia' : { x : 277, y : 378 },
+        'Tyrrhenian Sea' : { x : 346, y : 483 },
+        'Ukraine' : { x : 427, y : 327 },
+        'Venice' : { x : 250, y : 408 },
+        'Vienna' : { x : 314, y : 360 },
+        'Wales' : { x : 125, y : 285 },
+        'Warsaw' : { x : 361, y : 315 },
+        'Western Mediterranean' : { x : 140, y : 492 },
+        'Yorkshire' : { x : 161, y : 254 }
+      };
+
+      var unitOccupationLocation = function (in_provinceTarget) {
+        return unitOccupationLocationMap[in_provinceTarget];
+      };
+
+      var unitDislodgementLocation = function (in_provinceTarget) {
+        var loc = unitOccupationLocation(in_provinceTarget);
+        return {
+          x : loc.x - 5,
+          y : loc.y - 5
+        };
+      };
+
       window.onload = function () {
+        window.svgMap = document.getElementById('map');
+        window.svgMap.style.display = 'none';
+        window.svgMap.armies = [];
+        window.svgMap.fleets = [];
         document.body.innerWidth = window.innerWidth;
         document.body.innerHeight = window.innerHeight;
         uiInitial(document.body);
       };
 
     </script>
+
+    <svg id="map" viewBox="0 0 610 560" xmlns="http://www.w3.org/2000/svg" xmlns:xlink="http://www.w3.org/1999/xlink">
+    <title>Diplomacy</title>
+    <desc>
+    Variant SVG coding 2006 by Martin Asal
+    Copyright: CC-BY-SA-3.0-DE  (http://creativecommons.org/licenses/by-sa/3.0/deed.de)
+    Created for Diplomap (http://www.games2relax.net/diplomap/)
+    </desc>
+
+    <defs>
+    <style type="text/css">
+    <![CDATA[
+      .l, .Unowned	{fill:#FFFFDD; stroke:black; stroke-linejoin:round}
+      .w		{fill:#99CCFF; stroke:black; stroke-linejoin:round}
+      .s		{fill:#DDDDDD; stroke:black; stroke-linejoin:round}
+
+      text		{font-family:Arial,Helvetica,sans-serif; font-size:8px}
+
+      .Austria	{fill:#FF0000; stroke:black}
+      .England	{fill:#0000FF; stroke:black}
+      .France 	{fill:#00FFFF; stroke:black}
+      .Germany	{fill:#808080; stroke:black}
+      .Italy  	{fill:#00FF00; stroke:black}
+      .Russia 	{fill:#008000; stroke:black}
+      .Turkey 	{fill:#FFFF00; stroke:black}
+    ]]>
+    </style>
+    </defs>
+
+    <g id="Norwegian Sea" title="Norwegian Sea">
+      <polygon class="w" points="362,33 357,39 343,44 324,54 320,64 310,75 309,84 303,86 292,111 277,132 269,134 264,142 258,141 236,154 198,154 171,181 171,197 158,193 152,194 154,188 161,185 162,181
+        148,177 148,0 362,0"/>
+      <text x="220" y="70">NWG</text>
+    </g>
+    <g id="North Sea" title="North Sea">
+      <path class="w" d="M171,197 L171,181 A27,27 0,0,1 198,154 L241,154 L241,224 L248,224 L245,237 L211,237 L211,301 L173,301 L165,293 L140,197Z"/>
+      <text x="190" y="230">NTH</text>
+    </g>
+
+    <g id="Switzerland" title="Switzerland">
+      <polygon class="s" points="209,363 208,367 194,382 197,385 203,379 207,386 213,387 221,385 227,390 229,385 243,388 245,384 241,378 234,374 234,366 232,363 225,362 222,365"/>
+      <text x="215" y="378">Swi</text>
+    </g>
+    <g id="Adriatic Sea" title="Adriatic Sea">
+      <polygon class="w" points="322,480 297,456 300,453 290,453 278,443 272,424 260,417 261,401 270,398 276,399 275,403 278,410 282,401 286,402 289,418 306,436 331,454 331,477 335,480"/>
+      <text x="308" y="460">ADR</text>
+    </g>
+    <g id="Aegean Sea" title="Aegean Sea">
+      <polygon class="w" points="376,537 371,520 378,521 377,513 386,516 385,509 370,494 371,491 378,494 368,483 371,477 379,484 382,483 381,477 386,478 380,472 392,472 400,468 408,470 410,473 414,475
+        410,482 409,487 417,486 417,489 420,495 417,498 417,507 423,510 427,524 435,523 435,530 416,549 412,547 387,546 383,544"/>
+      <text x="392" y="510">AEG</text>
+    </g>
+    <g id="Albania" title="Albania">
+      <polygon class="l" points="331,454 331,477 335,480 339,487 350,477 350,471 346,466 346,452 337,446 330,445"/>
+      <text x="333" y="460">Alb</text>
+    </g>
+    <g id="Ankara" title="Ankara">
+      <polygon class="l" points="555,438 551,437 520,441 514,438 511,440 502,433 481,438 470,447 464,457 468,461 468,479 466,491 473,491 490,480 501,482 508,480 531,460 546,462 555,460 557,449"/> 
+      <text x="510" y="455">Ank</text>
+    </g>
+    <g id="Apulia" title="Apulia">
+      <polygon class="l" points="304,484 310,480 318,485 322,485 322,480 297,456 300,453 290,453 278,443 274,447 279,451 280,455 279,458 293,481"/>
+      <text x="291" y="470">Apu</text>
+    </g>
+    <g id="Armenia" title="Armenia">
+      <polygon class="l" points="609,493 584,478 563,479 562,471 556,467 555,460 557,449 555,438 570,427 589,442 594,439 603,441 609,440"/>
+      <text x="585" y="467">Arm</text>
+    </g>
+    <g id="Baltic Sea" title="Baltic Sea">
+      <polygon class="w" points="266,255 271,260 278,254 277,250 280,248 279,243 282,253 289,254 294,245 305,244 312,229 311,220 359,220 349,229 347,243 347,248 348,254 344,262 337,264 334,273 328,274
+        326,265 314,266 307,273 294,275 286,274 287,267 280,266 266,275 261,274 260,269 256,266 256,263 254,255"/>
+      <text x="308" y="260">BAL</text>
+    </g>
+    <g id="Barents Sea" title="Barents Sea">
+      <polygon class="w" points="540 0 535,9 530,6 517,19 516,33 513,38 513,23 507,20 505,26 499,33 492,48 495,58 488,60 479,57 477,55 481,50 473,43 466,45 472,62 478,66 478,74 472,72 468,74 457,91
+        469,100 467,106 462,109 444,101 442,110 447,115 454,119 452,122 434,118 426,103 426,94 414,88 412,83 445,84 457,79 459,66 453,61 417,47 405,49 401,45 397,48 391,47 395,41 394,38 384,33 382,40
+        380,33 377,31 374,38 371,33 366,42 366,33 362,33 362,0"/>
+      <text x="440" y="15">BAR</text>
+    </g>
+    <g id="Belgium" title="Belgium">
+      <polygon class="l" points="191,299 194,303 206,306 205,311 208,315 210,326 205,331 192,323 184,315 169,311 173,301"/>
+      <text x="192" y="321">Bel</text>
+    </g>
+    <g id="Berlin" title="Berlin">
+      <polygon class="l" points="294,275 286,274 287,267 280,266 266,275 266,283 262,287 264,293 261,296 263,310 288,305 296,300 297,296 292,290"/>
+      <text x="272" y="292">Ber</text>
+    </g>
+    <g id="Black Sea" title="Black Sea">
+      <polygon class="w" points="440,458 430,455 426,450 422,441 425,427 429,426 430,423 432,409 439,404 438,397 446,378 459,375 461,377 459,379 465,383 476,381 478,383 472,385 468,392 477,396 477,401
+        486,404 488,397 494,396 497,392 507,389 506,384 494,387 485,378 503,364 526,351 527,354 514,365 517,371 520,371 515,384 511,383 510,386 517,393 528,394 554,406 567,408 573,417 570,427 555,438
+        551,437 520,441 514,438 511,440 502,433 481,438 470,447 464,457 442,460"/>
+      <text x="500" y="418">BLA</text>
+    </g>
+    <g id="Bohemia" title="Bohemia">
+      <polygon class="l" points="281,356 276,346 268,343 264,329 266,325 278,326 288,321 297,322 311,334 314,332 321,339 322,347 316,348 303,346 295,349 292,357"/>
+      <text x="283" y="347">Boh</text>
+    </g>
+    <g id="Brest" title="Brest">
+      <polygon class="l" points="150,319 144,318 142,312 136,310 136,326 124,323 122,318 102,317 100,322 103,328 109,329 123,344 122,350 123,357 128,363 146,365 146,337 148,329"/>
+      <text x="130" y="345">Bre</text>
+    </g>
+    <g id="Budapest" title="Budapest">
+      <polygon class="l" points="394,376 395,382 401,385 406,396 401,402 387,402 367,406 365,412 360,413 342,410 338,412 335,410 332,410 323,408 321,398 311,394 308,383 311,375 322,370 335,354 337,350
+        350,347 360,351 368,353 377,360 378,363 384,365"/>
+      <text x="350" y="390">Bud</text>
+    </g>
+    <g id="Bulgaria EC" title="Bulgaria (ec)">
+      <polyline class="l" points="413,464 412,454 420,451 426,450 422,441 425,427 429,426 430,423 422,420 410,420 404,422 398,427 390,425 382,427 375,423 370,425 367,421 365,425 368,433 371,438"/>
+      <text x="395" y="443">Bul</text>
+    </g>
+    <g id="Bulgaria SC" title="Bulgaria (sc)">
+      <polyline class="l" points="371,438 366,439 371,456 365,461 369,464 376,464 388,460 392,472 400,468 408,470 413,464 412,454"/>
+    </g>
+    <g id="Burgundy" title="Burgundy">
+      <polygon class="l" points="192,323 205,331 204,338 211,346 213,352 209,363 208,367 194,382 178,381 178,390 173,396 168,395 163,387 165,383 158,380 156,374 165,365 185,344 188,332"/>
+      <text x="185" y="371">Bur</text>
+    </g>
+    <g id="Clyde" title="Clyde">
+      <polygon class="l" points="138,214 130,208 129,197 139,189 140,182 148,177 162,181 161,185 154,188 152,194 146,200 144,213"/>
+      <text x="133" y="201">Cly</text>
+    </g>
+    <g id="Constantinople" title="Constantinople">
+      <polygon class="l" points="408,470 410,473 414,475 410,482 409,487 417,486 417,489 423,487 432,493 452,495 466,491 468,479 468,461 464,457 442,460 440,458 430,455 426,450 420,451 412,454 413,464"/>
+      <polygon class="w" points="414,475 421,467 435,463 440,458 442,460 439,463 448,464 425,475"/>
+      <text x="435" y="483">Con</text>
+    </g>
+    <g id="Denmark" title="Denmark">
+      <polygon class="l" points="279,243 275,242 269,243 266,240 267,234 266,221 263,223 248,224 245,237 243,247 244,254 254,255 266,255 271,260 278,254 277,250 280,248 "/>
+      <polygon class="w" points="269,243 268,246 263,247 266,255 254,255 257,247 266,240"/>
+      <text x="250" y="235">Den</text>
+    </g>
+    <g id="Eastern Mediterranean" title="Eastern Mediterranean">
+      <polygon class="w" points="435,530 441,526 447,528 453,534 464,531 466,521 475,520 485,528 491,530 505,526 511,514 520,517 527,508 530,509 525,518 526,530 532,535 528,559 400,559 400,554 414,552 416,549"/>
+      <text x="455" y="550">EAS</text>
+    </g>
+    <g id="Edinburgh" title="Edinburgh">
+      <polygon class="l" points="152,194 158,193 171,197 170,202 165,210 158,214 151,215 157,216 161,218 163,226 155,228 145,217 144,213 146,200"/>
+      <text x="152" y="202">Edi</text>
+    </g>
+    <g id="English Channel" title="English Channel">
+      <polygon class="w" points="173,301 169,311 153,315 155,320 150,319 144,318 142,312 136,310 136,326 124,323 122,318 102,317 88,303 100,291 110,292 120,295 124,291 134,294 147,295 160,298 168,296"/>
+      <text x="135" y="306">ENG</text>
+    </g>
+    <g id="Finland" title="Finland">
+      <polygon class="l" points="362,107 368,108 372,120 366,121 359,136 345,151 347,160 350,165 348,178 349,184 357,186 365,191 384,185 402,177 412,161 410,152 414,147 410,130 402,118 401,110 392,92
+        393,73 387,68 388,61 386,58 388,54 379,48 370,49 369,61 355,62 346,54 342,61 356,71"/>
+      <text x="375" y="160">Fin</text>
+    </g>
+    <g id="Galicia" title="Galicia">
+      <polygon class="l" points="333,330 341,330 344,332 353,327 356,323 361,324 367,329 374,327 379,324 383,327 385,332 399,338 404,354 403,360 404,371 394,376 384,365 378,363 377,360 368,353 360,351
+        350,347 337,350 329,346 322,347 321,339 322,347 321,339 325,340 329,338"/>
+      <text x="355" y="343">Gal</text>
+    </g>
+    <g id="Gascony" title="Gascony">
+      <polygon class="l" points="128,363 121,382 122,384 112,399 113,407 123,412 134,417 135,414 142,417 149,403 157,397 168,395 163,387 165,383 158,380 156,374 149,372 146,365"/>
+      <text x="130" y="400">Gas</text>
+    </g>
+    <g id="Greece" title="Greece">
+      <polygon class="l" points="339,487 346,498 350,498 347,500 352,508 367,507 371,511 355,510 350,514 357,521 359,533 360,528 367,536 368,531 376,537 371,520 378,521 377,513 386,516 385,509 370,494
+        371,491 378,494 368,483 371,477 379,484 382,483 381,477 386,478 380,472 392,472 388,460 376,464 369,464 361,467 356,471 350,471 350,477"/>
+      <text x="352" y="490">Gre</text>
+    </g>
+    <g id="Gulf of Lyon" title="Gulf of Lyon">
+      <polygon class="w" points="115,469 110,461 124,444 131,439 146,438 157,432 158,425 158,418 169,412 176,417 188,422 198,421 211,416 222,410 233,415 238,431 224,431 221,434 211,436 213,451 218,454
+        218,458 214,461 206,462 205,466 154,466 148,463 142,469"/>
+      <text x="170" y="457">LYO</text>
+    </g>
+    <g id="Gulf of Bothnia" title="Gulf of Bothnia">
+      <polygon class="w" points="311,220 314,209 322,206 328,203 331,193 326,183 320,182 321,161 330,146 343,138 351,128 347,121 349,112 355,104 362,107 368,108 372,120 366,121 359,136 345,151 347,160
+        350,165 348,178 349,184 357,186 365,191 384,185 402,177 403,183 411,184 414,187 408,187 400,192 399,197 387,196 371,198 369,202 365,204 368,210 372,213 373,221 377,227 373,229 366,228 359,220"/>
+      <text x="328" y="175">BOT</text>
+    </g>
+    <g id="Heligoland Bight" title="Heligoland Bight">
+      <polygon class="w" points="245,237 243,247 244,254 243,257 245,263 244,270 244,273 235,277 234,274 230,273 226,275 211,274 211,237"/>
+      <text x="220" y="265">HEL</text>
+    </g>
+    <g id="Holland" title="Holland">
+      <polygon class="l" points="226,275 227,280 225,292 220,298 215,297 213,302 210,313 208,315 205,311 206,306 194,303 191,299 198,289 205,276 205,279 207,279 211,274"/>
+      <text x="210" y="290">Hol</text>
+    </g>
+    <g id="Ionian Sea" title="Ionian Sea">
+      <polygon class="w" points="289,511 290,514 295,515 308,500 311,491 304,484 310,480 318,485 322,485 322,480 335,480 339,487 346,498 350,498 347,500 352,508 367,507 371,511 355,510 350,514 357,521
+        359,533 360,528 367,536 368,531 376,537 383,544 380,547 383,550 400,554 400,559 232,559 234,551 232,544 225,535 231,531 236,524 247,513 258,519 273,531 281,532 282,521 285,513 285,511"/>
+      <text x="315" y="520">ION</text>
+    </g>
+    <g id="Irish Sea" title="Irish Sea">
+      <polygon class="w" points="100,291 112,287 122,281 130,282 127,276 119,272 116,272 115,265 128,262 126,256 121,257 132,250 135,250 139,240 136,229 130,227 120,227 110,232 109,246 98,259 87,257
+        70,261 58,273 88,303"/>
+      <text x="95" y="270">IRI</text>
+    </g>
+    <g id="Kiel" title="Kiel">
+      <polygon class="l" points="244,254 243,257 245,263 244,270 244,273 235,277 234,274 230,273 226,275 227,280 225,292 220,298 215,297 213,302 232,308 241,316 243,322 263,310 261,296 264,293
+        262,287 266,283 266,275 261,274 260,269 256,266 256,263 254,255"/>
+      <polygon class="w" points="244,270 244,273 256,266 256,263 "/>
+      <text x="237" y="285">Kie</text>
+    </g>
+    <g id="Liverpool" title="Liverpool">
+      <polygon class="l" points="128,262 126,256 121,257 132,250 135,250 139,240 136,229 130,227 130,223 138,217 138,214 144,213 145,217 155,228 155,239 151,248 150,264 143,262"/>
+      <text x="138" y="230">Lvp</text>
+    </g>
+    <g id="Livonia" title="Livonia">
+      <polygon class="l" points="369,202 365,204 368,210 372,213 373,221 377,227 373,229 366,228 359,220 349,229 347,243 354,251 356,261 362,260 367,265 365,281 372,283 379,290 389,285 392,278
+        404,275 405,239 409,228 405,217 394,205 382,206 372,205"/>
+      <text x="380" y="260">Lvn</text>
+    </g>
+    <g id="London" title="London">
+      <polygon class="l" points="166,269 168,270 171,268 177,270 178,274 176,283 165,293 172,294 168,296 160,298 147,295 145,281 150,277 153,271"/>
+      <text x="160" y="280">Lon</text>
+    </g>
+    <g id="Marseilles" title="Marseilles">
+      <polygon class="l" points="142,417 149,403 157,397 168,395 173,396 178,390 178,381 194,382 197,385 203,379 207,386 204,390 207,396 201,399 204,402 203,410 211,416 198,421 188,422 176,417
+        169,412 158,418 158,425 154,427"/>
+      <text x="173" y="412">Mar</text>
+    </g>
+    <g id="Mid-Atlantic Ocean" title="Mid-Atlantic Ocean">
+      <polygon class="w" points="102,317 100,322 103,328 109,329 123,344 122,350 123,357 128,363 121,382 122,384 112,399 101,396 96,397 72,384 59,381 54,375 48,374 46,378 39,375 33,381 35,384 32,396
+        30,406 17,427 14,427 10,433 13,440 15,441 12,450 13,454 8,462 19,469 27,468 33,475 34,484 37,490 37,495 33,496 17,518 0,520 0,273 58,273"/>
+      <text x="50" y="355">MAO</text>
+    </g>
+    <g id="Moscow" title="Moscow">
+      <polygon class="l" points="609,117 598,132 573,143 564,159 534,164 515,169 489,184 476,183 458,194 456,207 457,210 451,213 447,209 439,211 428,225 421,229 409,228 405,239 404,275 392,278
+        389,285 379,290 386,309 390,306 456,292 468,295 477,289 494,295 505,280 516,286 526,287 533,283 549,284 554,304 564,305 569,321 597,330 609,330"/>
+      <text x="460" y="265">Mos</text>
+    </g>
+    <g id="Munich" title="Munich">
+      <polygon class="l" points="234,366 243,370 246,369 250,371 267,368 271,370 269,362 275,362 281,356 276,346 268,343 264,329 266,325 278,326 288,321 284,314 288,305 263,310 243,322 237,322
+        219,344 211,346 213,352 209,363 222,365 225,362 232,363"/>
+      <text x="235" y="360">Mun</text>
+    </g>
+    <g id="Naples" title="Naples">
+      <polygon class="l" points="271,464 276,474 290,487 294,502 289,511 290,514 295,515 308,500 311,491 304,484 293,481 279,458"/>
+      <text x="293" y="493">Nap</text>
+    </g>
+    <g id="North Atlantic Ocean" title="North Atlantic Ocean">
+      <polygon class="w" points="70,261 64,250 67,242 71,245 81,234 74,228 80,225 78,218 82,217 89,220 94,220 95,218 94,216 97,216 101,212 110,212 119,217 120,227 130,227 130,223 138,217 138,214
+        130,208 129,197 139,189 140,182 148,177 148,0 0,0 0,273 58,273"/>
+      <text x="65" y="120">NAO</text>
+    </g>
+    <g id="North Africa" title="North Africa">
+      <polygon class="l" points="203,520 179,515 169,518 150,511 117,509 106,511 99,515 89,512 84,518 79,520 68,516 68,511 64,514 46,509 42,502 41,494 37,495 33,496 17,518 0,520 0,559 195,559 197,527"/>
+      <text x="130" y="536">Naf</text>
+    </g>
+    <g id="Norway" title="Norway">
+      <polygon class="l" points="397,48 391,47 395,41 394,38 384,33 382,40 380,33 377,31 374,38 371,33 366,42 366,33 362,33 357,39 343,44 324,54 320,64 310,75 309,84 303,86 292,111 277,132 269,134
+        264,142 258,141 236,154 237,160 233,167 231,180 233,186 229,192 231,201 241,209 246,210 266,201 270,193 275,203 279,204 287,177 285,170 290,164 292,133 301,132 300,126 309,115 308,104 311,101
+        324,71 332,74 330,64 341,65 342,61 346,54 355,62 369,61 370,49 379,48 388,54 386,58 388,61"/>
+      <text x="250" y="175">Nwy</text>
+    </g>
+    <g id="Paris" title="Paris">
+      <polygon class="l" points="146,365 149,372 156,374 165,365 185,344 188,332 172,328 165,331 159,331 148,329 146,337"/>
+      <text x="155" y="358">Par</text>
+    </g>
+    <g id="Picardy" title="Picardy">
+      <polygon class="l" points="169,311 153,315 155,320 150,319 148,329 159,331 165,331 172,328 188,332 192,323 184,315"/>
+      <text x="168" y="326">Pic</text>
+    </g>
+    <g id="Piedmont" title="Piedmont">
+      <polygon class="l" points="207,386 204,390 207,396 201,399 204,402 203,410 211,416 222,410 233,415 236,411 233,404 246,392 243,388 229,385 227,390 221,385 213,387"/>
+      <text x="215" y="408">Pie</text>
+    </g>
+    <g id="Portugal" title="Portugal">
+      <polygon class="l" points="32,396 30,406 17,427 14,427 10,433 13,440 15,441 12,450 13,454 8,462 19,469 27,468 36,457 34,447 40,441 37,431 42,432 52,412 61,411 62,407 55,400 42,399 43,395"/>
+      <text x="22" y="440">Por</text>
+    </g>
+    <g id="Prussia" title="Prussia">
+      <polygon class="l" points="347,243 347,248 348,254 344,262 337,264 334,273 328,274 326,265 314,266 307,273 294,275 292,290 297,296 296,300 320,303 324,299 326,292 341,287 345,289 359,286
+        365,281 367,265 362,260 356,261 354,251"/>
+      <text x="335" y="283">Pru</text>
+    </g>
+    <g id="Rome" title="Rome">
+      <polygon class="l" points="247,442 248,447 256,458 271,464 279,458 280,455 279,451 274,447 263,434 250,438"/>
+      <text x="257" y="452">Rom</text>
+    </g>
+    <g id="Ruhr" title="Ruhr">
+      <polygon class="l" points="213,302 210,313 208,315 210,326 205,331 204,338 211,346 219,344 237,322 243,322 241,316 232,308"/>
+      <text x="215" y="330">Ruh</text>
+    </g>
+    <g id="Rumania" title="Rumania">
+      <polygon class="l" points="403,360 404,371 394,376 395,382 401,385 406,396 401,402 387,402 367,406 365,412 367,421 370,425 375,423 382,427 390,425 398,427 404,422 410,420 422,420 430,423 432,409
+        439,404 438,397 427,399 422,382 423,376 414,372 411,361"/>
+      <text x="410" y="415">Rum</text>
+    </g>
+    <g id="Serbia" title="Serbia">
+      <polygon class="l" points="365,412 360,413 342,410 338,412 335,410 332,410 330,416 331,424 327,429 330,437 337,446 346,452 346,466 350,471 356,471 361,467 369,464 365,461 371,456 366,439 371,438
+        368,433 365,425 367,421"/>
+      <text x="350" y="450">Ser</text>
+    </g>
+    <g id="Sevastopol" title="Sevastopol">
+      <polygon class="l" points="438,397 446,378 459,375 461,377 459,379 465,383 476,381 478,383 472,385 468,392 477,396 477,401 486,404 488,397 494,396 497,392 507,389 506,384 494,387 485,378 503,364
+        526,351 527,354 514,365 517,371 520,371 515,384 511,383 510,386 517,393 528,394 554,406 567,408 573,417 570,427 589,442 594,439 603,441 609,440 609,330 597,330 569,321 564,305 554,304 549,284
+        533,283 526,287 516,286 505,280 494,295 477,289 468,295 470,303 466,307 460,345 445,350 434,360 432,372 423,376 422,382 427,399"/>
+      <text x="540" y="350">Sev</text>
+    </g>
+    <g id="Silesia" title="Silesia">
+      <polygon class="l" points="288,321 297,322 311,334 314,332 321,339 325,340 329,338 333,330 326,327 323,322 320,303 296,300 288,305 284,314"/>
+      <text x="304" y="325">Sil</text>
+    </g>
+    <g id="Skagerrak" title="Skagerrak">
+      <polygon class="w" points="241,209 246,210 266,201 270,193 275,203 277,218 276,224 282,236 279,240 279,243 275,242 269,243 266,240 267,234 266,221 263,223 248,224 241,224"/>
+      <text x="255" y="220">SKA</text>
+    </g>
+    <g id="Smyrna" title="Smyrna">
+      <polygon class="l" points="417,489 420,495 417,498 417,507 423,510 427,524 435,523 435,530 441,526 447,528 453,534 464,531 466,521 475,520 485,528 491,530 505,526 511,514 520,517 527,508 530,509
+        536,494 545,486 555,484 563,479 562,471 556,467 555,460 546,462 531,460 508,480 501,482 490,480 473,491 466,491 452,495 432,493 423,487"/>
+      <text x="460" y="510">Smy</text>
+    </g>
+    <g id="Spain NC" title="Spain (nc)">
+      <polyline class="l" points="134,417 123,412 113,407 112,399 101,396 96,397 72,384 59,381 54,375 48,374 46,378 39,375 33,381 35,384 32,396 43,395 42,399 55,400 62,407 61,411 52,412 42,432 37,431 40,441"/>
+    </g>
+    <g id="Spain SC" title="Spain (sc)">
+      <polyline class="l" points="40,441 34,447 36,457 27,468 33,475 34,484 37,490 47,488 52,489 60,486 78,491 83,494 86,485 90,483 98,484 107,474 113,473 115,469 110,461 124,444 131,439 146,438
+        157,432 158,425 154,427 142,417 135,414 134,417 123,412"/>
+      <text x="85" y="450">Spa</text>
+    </g>
+    <g id="St. Petersburg NC" title="St Petersburg (nc)">
+      <polyline class="l" points="534,164 564,159 573,143 598,132 609,117 609,0 540 0 535,9 530,6 517,19 516,33 513,38 513,23 507,20 505,26 499,33 492,48 495,58 488,60 479,57 477,55 481,50 473,43 466,45 472,62
+        478,66 478,74 472,72 468,74 457,91 469,100 467,106 462,109 444,101 442,110 447,115 454,119 452,122 434,118 426,103 426,94 414,88 412,83 445,84 457,79 459,66 453,61 417,47 405,49 401,45 397,48
+        388,61 387,68 393,73 392,92 401,110 402,118 410,130 414,147"/>
+      <text x="460" y="149">Stp</text>
+    </g>
+    <g id="St. Petersburg SC" title="St Petersburg (sc)">
+      <polyline class="l" points="414,147 410,152 412,161 402,177 403,183 411,184 414,187 408,187 400,192 399,197 387,196 371,198 369,202 372,205 382,206 394,205 405,217 409,228 421,229 428,225 439,211
+        447,209 451,213 457,210 456,207 458,194 476,183 489,184 515,169 534,164 564,159"/>
+    </g>
+    <g id="Sweden" title="Sweden">
+      <polygon class="l" points="275,203 277,218 276,224 282,236 279,240 279,243 282,253 289,254 294,245 305,244 312,229 311,220 314,209 322,206 328,203 331,193 326,183 320,182 321,161 330,146 343,138
+        351,128 347,121 349,112 355,104 362,107 356,71 342,61 341,65 330,64 332,74 324,71 311,101 308,104 309,115 300,126 301,132 292,133 290,164 285,170 287,177 279,204"/>
+      <text x="300" y="170">Swe</text>
+    </g>
+    <g id="Syria" title="Syria">
+      <polygon class="l" points="530,509 536,494 545,486 555,484 563,479 584,478 609,493 609,559 528,559 532,535 526,530 525,518"/>
+      <text x="570" y="535">Syr</text>
+    </g>
+    <g title="Trieste">
+      <polygon class="l" points="276,399 275,403 278,410 282,401 286,402 289,418 306,436 331,454 330,445 337,446 330,437 327,429 331,424 330,416 332,410 323,408 321,398 311,394 308,383 299,385 294,380
+        289,385 276,386 279,389"/>
+      <text x="305" y="425">Tri</text>
+    </g>
+    <g id="Tunis" title="Tunis">
+      <polygon class="l" points="232,559 234,551 232,544 225,535 231,531 236,524 233,523 224,527 223,518 218,516 212,517 208,521 203,520 197,527 195,559"/>
+      <text x="210" y="555">Tun</text>
+    </g>
+    <g id="Tuscany" title="Tuscany">
+      <polygon class="l" points="233,415 238,431 247,442 250,438 263,434 253,418 246,416 240,415 236,411"/>
+      <text x="240" y="425">Tus</text>
+    </g>
+    <g id="Tyrolia" title="Tyrolia">
+      <polygon class="l" points="234,366 243,370 246,369 250,371 267,368 271,370 269,362 275,362 281,356 292,357 295,362 294,380 289,385 276,386 268,385 259,388 255,394 250,397 246,392 243,388 245,384
+        241,378 234,374"/>
+      <text x="255" y="380">Tyr</text>
+    </g>
+    <g id="Tyrrhenian Sea" title="Tyrrhenian Sea">
+      <polygon class="w" points="238,431 247,442 248,447 256,458 271,464 276,474 290,487 294,502 289,511 285,511 285,508 276,510 263,510 257,507 252,508 247,513 236,524 233,523 224,527 223,518
+        218,516 218,490 220,490 224,468 222,458 218,458 218,454 223,450 225,444 225,436 224,431"/>
+      <text x="245" y="495">TYS</text>
+    </g>
+    <g id="Ukraine" title="Ukraine">
+      <polygon class="l" points="383,327 385,332 399,338 404,354 403,360 411,361 414,372 423,376 432,372 434,360 445,350 460,345 466,307 470,303 468,295 456,292 390,306 386,309"/>
+      <text x="420" y="340">Ukr</text>
+    </g>
+    <g id="Venice" title="Venice">
+      <polygon class="l" points="278,443 272,424 260,417 261,401 270,398 276,399 279,389 276,386 268,385 259,388 255,394 250,397 246,392 233,404 236,411 240,415 246,416 253,418 263,434 274,447"/>
+      <text x="245" y="407">Ven</text>
+    </g>
+    <g id="Vienna" title="Vienna">
+      <polygon class="l" points="292,357 295,349 303,346 316,348 322,347 329,346 337,350 335,354 322,370 311,375 308,383 299,385 294,380 295,362"/>
+      <text x="307" y="370">Vie</text>
+    </g>
+    <g id="Wales" title="Wales">
+      <polygon class="l" points="100,291 112,287 122,281 130,282 127,276 119,272 116,272 115,265 128,262 143,262 150,264 153,271 150,277 145,281 147,295 134,294 124,291 120,295 110,292"/>
+      <text x="130" y="275">Wal</text>
+    </g>
+    <g id="Warsaw" title="Warsaw">
+      <polygon class="l" points="333,330 326,327 323,322 320,303 324,299 326,292 341,287 345,289 359,286 365,281 372,283 379,290 386,309 383,327 379,324 374,327 367,329 361,324 356,323 353,327
+        344,332 341,330"/>
+      <text x="355" y="304">War</text>
+    </g>
+    <g id="Western Mediterranean" title="Western Mediterranean">
+      <polygon class="w" points="37,490 47,488 52,489 60,486 78,491 83,494 86,485 90,483 98,484 107,474 113,473 115,469 142,469 150,471 154,466 205,466 206,476 204,485 208,492 212,492 217,489 218,490
+        218,516 212,517 208,521 203,520 179,515 169,518 150,511 117,509 106,511 99,515 89,512 84,518 79,520 68,516 68,511 64,514 46,509 42,502 41,494 37,495"/>
+      <text x="160" y="491">WES</text>
+    </g>
+    <g id="Yorkshire" title="Yorkshire">
+      <polygon class="l" points="163,226 163,239 168,246 170,252 169,265 166,269 153,271 150,264 151,248 155,239 155,228"/>
+      <text x="155" y="254">Yor</text>
+    </g><defs>
+
+    <g id="A">
+      <path d="M9,-6 L2,0 M9,6 L0,0"/>
+      <path d="M-11,-6 v4 h17 a2,2 0,0 0 0,-4z"/>
+      <circle r="6"/>
+    </g>
+    <g id="F">
+      <polygon points="-2,-3 10,-3 -2,-13"/>
+      <polygon points="-12,-1 -6,5 6,5 12,-1"/>
+    </g>
+    <g id="sc"> <!-- colored SC -->
+      <circle r="4"/>
+    </g>
+    <use id="SC" xlink:href="#sc" class="Unowned"/>
+    </defs>
+
+    <g id="SCNorway" title="Norway"><use xlink:href="#sc" class="Unowned" transform="translate(270,187)"/></g>
+    <g id="SCSweden" title="Sweden"><use xlink:href="#sc" class="Unowned" transform="translate(323,196)"/></g>
+    <g id="SCDenmark" title="Denmark"><use xlink:href="#sc" class="Unowned" transform="translate(272,252)"/></g>
+    <g id="SCMoscow" title="Moscow"><use xlink:href="#sc" class="Unowned" transform="translate(481,234)"/></g>
+    <g id="SCSevastopol" title="Sevastopol"><use xlink:href="#sc" class="Unowned" transform="translate(483,396)"/></g>
+    <g id="SCSt. Petersburg" title="St Petersburg"><use xlink:href="#sc" class="Unowned" transform="translate(418,187)"/></g>
+    <g id="SCAnkara" title="Ankara"><use xlink:href="#sc" class="Unowned" transform="translate(482,469)"/></g>
+    <g id="SCConstantinople" title="Constantinople"><use xlink:href="#sc" class="Unowned" transform="translate(429,460)"/></g>
+    <g id="SCSmyrna" title="Smyrna"><use xlink:href="#sc" class="Unowned" transform="translate(424,502)"/></g>
+    <g id="SCRumania" title="Rumania"><use xlink:href="#sc" class="Unowned" transform="translate(402,413)"/></g>
+    <g id="SCBulgaria" title="Bulgaria"><use xlink:href="#sc" class="Unowned" transform="translate(377,444)"/></g>
+    <g id="SCGreece" title="Greece"><use xlink:href="#sc" class="Unowned" transform="translate(378,507)"/></g>
+    <g id="SCSerbia" title="Serbia"><use xlink:href="#sc" class="Unowned" transform="translate(343,419)"/></g>
+    <g id="SCWarsaw" title="Warsaw"><use xlink:href="#sc" class="Unowned" transform="translate(346,302)"/></g>
+    <g id="SCBudapest" title="Budapest"><use xlink:href="#sc" class="Unowned" transform="translate(326,376)"/></g>
+    <g id="SCVienna" title="Vienna"><use xlink:href="#sc" class="Unowned" transform="translate(301,363)"/></g>
+    <g id="SCTrieste" title="Trieste"><use xlink:href="#sc" class="Unowned" transform="translate(284,396)"/></g>
+    <g id="SCBerlin" title="Berlin"><use xlink:href="#sc" class="Unowned" transform="translate(281,298)"/></g>
+    <g id="SCKiel" title="Kiel"><use xlink:href="#sc" class="Unowned" transform="translate(254,278)"/></g>
+    <g id="SCMunich" title="Munich"><use xlink:href="#sc" class="Unowned" transform="translate(258,359)"/></g>
+    <g id="SCVenice" title="Venice"><use xlink:href="#sc" class="Unowned" transform="translate(261,397)"/></g>
+    <g id="SCRome" title="Rome"><use xlink:href="#sc" class="Unowned" transform="translate(252,443)"/></g>
+    <g id="SCNaples" title="Naples"><use xlink:href="#sc" class="Unowned" transform="translate(278,469)"/></g>
+    <g id="SCTunis" title="Tunis"><use xlink:href="#sc" class="Unowned" transform="translate(220,529)"/></g>
+    <g id="SCSpain" title="Spain"><use xlink:href="#sc" class="Unowned" transform="translate(80,432)"/></g>
+    <g id="SCPortugal" title="Portugal"><use xlink:href="#sc" class="Unowned" transform="translate(15,434)"/></g>
+    <g id="SCMarseilles" title="Marseilles"><use xlink:href="#sc" class="Unowned" transform="translate(186,417)"/></g>
+    <g id="SCParis" title="Paris"><use xlink:href="#sc" class="Unowned" transform="translate(173,334)"/></g>
+    <g id="SCBrest" title="Brest"><use xlink:href="#sc" class="Unowned" transform="translate(106,322)"/></g>
+    <g id="SCBelgium" title="Belgium"><use xlink:href="#sc" class="Unowned" transform="translate(186,305)"/></g>
+    <g id="SCHolland" title="Holland"><use xlink:href="#sc" class="Unowned" transform="translate(205,284)"/></g>
+    <g id="SCLondon" title="London"><use xlink:href="#sc" class="Unowned" transform="translate(162,290)"/></g>
+    <g id="SCLiverpool" title="Liverpool"><use xlink:href="#sc" class="Unowned" transform="translate(144,257)"/></g>
+    <g id="SCEdinburgh" title="Edinburgh"><use xlink:href="#sc" class="Unowned" transform="translate(154,219)"/></g>
+
+    <!--
+    <g title="Vienna"><use xlink:href="#A" id="Vienna" class="Austria" transform="translate(&Vienna;)"/></g>
+    <g title="Budapest"><use xlink:href="#A" id="Budapest" class="Austria" transform="translate(&Budapest;)"/></g>
+    <g title="Trieste"><use xlink:href="#F" id="Trieste" class="Austria" transform="translate(&Trieste;)"/></g>
+    <g title="London"><use xlink:href="#F" id="London" class="England" transform="translate(&London;)"/></g>
+    <g title="Edinburgh"><use xlink:href="#F" id="Edinburgh" class="England" transform="translate(&Edinburgh;)"/></g>
+    <g title="Liverpool"><use xlink:href="#A" id="Liverpool" class="England" transform="translate(&Liverpool;)"/></g>
+    <g title="Paris"><use xlink:href="#A" id="Paris" class="France" transform="translate(&Paris;)"/></g>
+    <g title="Marseilles"><use xlink:href="#A" id="Marseilles" class="France" transform="translate(&Marseilles;)"/></g>
+    <g title="Brest"><use xlink:href="#F" id="Brest" class="France" transform="translate(&Brest;)"/></g>
+    <g title="Berlin"><use xlink:href="#A" id="Berlin" class="Germany" transform="translate(&Berlin;)"/></g>
+    <g title="Munich"><use xlink:href="#A" id="Munich" class="Germany" transform="translate(&Munich;)"/></g>
+    <g title="Kiel"><use xlink:href="#F" id="Kiel" class="Germany" transform="translate(&Kiel;)"/></g>
+    <g title="Rome"><use xlink:href="#A" id="Rome" class="Italy" transform="translate(&Rome;)"/></g>
+    <g title="Venice"><use xlink:href="#A" id="Venice" class="Italy" transform="translate(&Venice;)"/></g>
+    <g title="Naples"><use xlink:href="#F" id="Naples" class="Italy" transform="translate(&Naples;)"/></g>
+    <g title="Moscow"><use xlink:href="#A" id="Moscow" class="Russia" transform="translate(&Moscow;)"/></g>
+    <g title="Warsaw"><use xlink:href="#A" id="Warsaw" class="Russia" transform="translate(&Warsaw;)"/></g>
+    <g title="St Petersburg (sc)"><use xlink:href="#F" id="St_Petersburg" class="Russia" transform="translate(&St_Petersburg__sc;)"/></g>
+    <g title="Sevastopol"><use xlink:href="#F" id="Sevastopol" class="Russia" transform="translate(&Sevastopol;)"/></g>
+    <g title="Constantinople"><use xlink:href="#A" id="Constantinople" class="Turkey" transform="translate(&Constantinople;)"/></g>
+    <g title="Smyrna"><use xlink:href="#A" id="Smyrna" class="Turkey" transform="translate(&Smyrna;)"/></g>
+    <g title="Ankara"><use xlink:href="#F" id="Ankara" class="Turkey" transform="translate(&Ankara;)"/></g>
+    -->
+    </svg>
+
   </body>
 
 </html>

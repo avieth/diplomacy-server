@@ -60,8 +60,10 @@ resource = mkResourceId
     update = secureHandler $ mkInputHandler (jsonO . jsonE . jsonI) $ doUpdate
 
     doUpdate :: StartGameInput -> ExceptT (Reason StartGameError) (ReaderT GameId Server) StartGameOutput
-    doUpdate input = withAdminCredentials (credentials input) startGame
+    doUpdate input = withAdminCredentials creds startGame
       where
+
+        StartGameInput creds = input
 
         startGame :: ExceptT (Reason StartGameError) (ReaderT GameId Server) StartGameOutput
         startGame = do
@@ -89,7 +91,7 @@ startGameState t randomDoubles game = case game of
         then Left NotEnoughPlayers
         else if tooManyPlayers
         then Left TooManyPlayers
-        else Right (GameStarted map' (SomeGame newGame) duration t)
+        else Right (GameStarted map' (SomeGame newGame) Nothing duration t)
       where
         registered :: [(Username, Password)]
         registered = fmap (\(x, y) -> (x, UD.password y)) (M.toList map)
@@ -111,11 +113,9 @@ startGameState t randomDoubles game = case game of
         makeUserData :: ((Username, Password), S.Set GreatPower) -> (Username, UserData S.Set)
         makeUserData ((u, p), s) = (u, UserData p s)
         map' = M.fromList (fmap makeUserData assignments)
-    GameStarted _ _ _ _ -> Left GameAlreadyStarted
+    GameStarted _ _ _ _ _ -> Left GameAlreadyStarted
 
-data StartGameInput = StartGameInput {
-      credentials :: Credentials
-    }
+newtype StartGameInput = StartGameInput Credentials
 
 deriving instance Generic StartGameInput
 deriving instance Typeable StartGameInput
