@@ -12,6 +12,8 @@ Portability : non-portable (GHC only)
 {-# LANGUAGE GADTs #-}
 {-# LANGUAGE OverloadedStrings #-}
 {-# LANGUAGE DataKinds #-}
+{-# LANGUAGE DeriveGeneric #-}
+{-# LANGUAGE StandaloneDeriving #-}
 
 module Types.GameState (
 
@@ -24,6 +26,8 @@ module Types.GameState (
 
     ) where
 
+import GHC.Generics
+import Control.DeepSeq
 import Control.Monad
 import Control.Applicative
 import qualified Data.Map as M
@@ -75,21 +79,17 @@ data GameState where
         -> Maybe SomeResolvedOrders
         -> Duration
         -- ^ Period of this game; after this duration, the game advances to the
-        --   next stage (resolve then continue).
+        --   next round if it's in typical phase.
+        -> Duration
+        -- ^ Second period of this game; after this duration, the game advances
+        --   to the next round if it's in adjust or retreat phase.
         -> Elapsed
         -- ^ Unix epoch time when this game was last advanced or when it was
         --   started.
         -> GameState
 
-{-
-instance Show GameState where
-    show gameState = case gameState of
-        GameNotStarted map _ -> "Game not started"
-        GameStarted map (SomeGame game) _ _ -> case game of
-            TypicalGame _ Unresolved _ _ _ -> showGame game
-            RetreatGame _ Unresolved _ _ _ _ _ -> showGame game
-            AdjustGame _ Unresolved _ _ _ -> showGame game
--}
+deriving instance Generic GameState
+instance NFData GameState
 
 -- | The game state viewed as a certain player, who controls a set of
 --   GreatPowers.

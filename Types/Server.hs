@@ -26,6 +26,7 @@ module Types.Server (
 
     ) where
 
+import Control.DeepSeq
 import Control.Monad.Trans.Except
 import Control.Monad.Trans.State as S
 import Control.Monad.State.Class as SC
@@ -91,7 +92,7 @@ modifyGameState gameId f = do
         Nothing -> throwE NotFound
         Just (password, gameState) -> do
             modified <- f gameState
-            SC.put (state { games = M.alter (const (Just (password, modified))) gameId (games state) })
+            SC.put (state { games = M.alter (const (Just (password, force modified))) gameId (games state) })
             return ()
 
 serverState :: Username -> Password -> IO ServerState
