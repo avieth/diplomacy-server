@@ -182,8 +182,8 @@ instance ToJSON GameStateView where
                     M.foldWithKey typicalOccupationFold M.empty (gameZonedOrders game)
                 RetreatGame _ _ _ _ _ _ _ ->
                     M.foldWithKey occupationFold M.empty (gameOccupation game)
-                AdjustGame _ _ _ _ _ ->
-                    M.foldWithKey occupationFold M.empty (gameOccupation game)
+                AdjustGame AdjustRound _ _ _ _ ->
+                    M.foldWithKey adjustOccupationFold M.empty (gameZonedOrders game)
 
             typicalOccupationFold
                 :: Zone
@@ -191,6 +191,23 @@ instance ToJSON GameStateView where
                 -> M.Map T.Text (GreatPower, Unit, Maybe T.Text)
                 -> M.Map T.Text (GreatPower, Unit, Maybe T.Text)
             typicalOccupationFold zone (aunit, SomeOrderObject object) = M.insert key (greatPower, unit, orderObjectText)
+              where
+                unit = Unit (alignedThing aunit)
+                dgpGreatPower = alignedGreatPower aunit
+                greatPower = GreatPower dgpGreatPower
+                key = printProvinceTarget (zoneProvinceTarget zone)
+                subject = (alignedThing aunit, zoneProvinceTarget zone)
+                orderObjectText :: Maybe T.Text
+                orderObjectText = do
+                    guard (dgpGreatPower `S.member` greatPowers)
+                    return $ printObject subject object
+
+            adjustOccupationFold
+                :: Zone
+                -> (Aligned DU.Unit, SomeOrderObject Adjust)
+                -> M.Map T.Text (GreatPower, Unit, Maybe T.Text)
+                -> M.Map T.Text (GreatPower, Unit, Maybe T.Text)
+            adjustOccupationFold zone (aunit, SomeOrderObject object) = M.insert key (greatPower, unit, orderObjectText)
               where
                 unit = Unit (alignedThing aunit)
                 dgpGreatPower = alignedGreatPower aunit
