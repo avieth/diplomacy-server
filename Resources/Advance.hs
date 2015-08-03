@@ -32,6 +32,7 @@ import Data.JSON.Schema
 import Rest
 import Rest.Resource as R
 import Diplomacy.Game
+import Diplomacy.SupplyCentreDefecit
 import Types.Server
 import Types.GameId
 import Types.Credentials
@@ -99,7 +100,9 @@ advance (SomeGame game) = case game of
         let resolved = resolve game
             continued = continue resolved
             resolvedOrders = gameZonedResolvedOrders resolved
-            defecits = fmap ((flip gameSupplyCentreDefecit) continued) [minBound..maxBound]
+            occupation = gameOccupation continued
+            control = gameControl continued
+            defecits = fmap (\greatPower -> supplyCentreDefecit greatPower occupation control) [minBound..maxBound]
         in  if all (== 0) defecits
             -- Automatically skip adjust phases where nobody has a defecit,
             -- positive or negative.
