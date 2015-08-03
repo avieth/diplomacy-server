@@ -15,6 +15,8 @@ module Types.GreatPower (
 
       GreatPower(..)
 
+    , outGreatPower
+
     ) where
 
 import GHC.Generics
@@ -28,6 +30,9 @@ import qualified Diplomacy.GreatPower as D
 
 newtype GreatPower = GreatPower D.GreatPower
     deriving (Eq, Ord, Show, Generic, Typeable)
+
+outGreatPower :: GreatPower -> D.GreatPower
+outGreatPower (GreatPower x) = x
 
 instance ToJSON GreatPower where
     toJSON (GreatPower p) = String . fromString . show $ p
