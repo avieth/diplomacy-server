@@ -27,6 +27,8 @@ import Control.Monad.Trans.Class
 import Control.Monad.Trans.Reader
 import Control.Monad.Trans.Except
 import Data.Typeable
+import Data.AtLeast
+import Data.TypeNat.Vect
 import Data.Aeson
 import Data.JSON.Schema
 import qualified Data.Map as M
@@ -39,8 +41,8 @@ import Diplomacy.Aligned
 import qualified Diplomacy.GreatPower as DGP
 import Diplomacy.Zone
 import Diplomacy.Unit
-import Diplomacy.OrderObject
 import Diplomacy.Subject
+import qualified Diplomacy.OrderObject as DOO
 import qualified Diplomacy.Order as DO
 import Types.Order
 import Types.Credentials
@@ -84,12 +86,13 @@ resource = mkResourceId
         modifier :: SomeGame -> GameState -> GameState
         modifier (SomeGame x) state = case state of
             GameNotStarted y duration duration' -> GameNotStarted y duration duration' -- Impossible; should not have this case...
-            GameStarted m _ resolved duration duration' elapsed -> GameStarted m (SomeGame x) resolved duration duration' elapsed
+            GameStarted m (AtLeast _ rest) duration duration' elapsed ->
+                GameStarted m (AtLeast (VCons (SomeGame x) VNil) rest) duration duration' elapsed
 
         checkAuthorization :: GameStateView -> ExceptT (Reason IssueOrdersError) (ReaderT GameId Server) ()
         checkAuthorization gameStateView = case gameStateView of
             GameNotStartedView -> return ()
-            GameStartedView greatPowers _ _ _ _ _ ->
+            GameStartedView greatPowers _ _ _ _ ->
                 if issuedOrdersGreatPowers issuedOrders `S.isSubsetOf` (S.map GreatPower greatPowers)
                 then return ()
                 else throwE NotAllowed
@@ -97,7 +100,7 @@ resource = mkResourceId
         issueOrders' :: GameStateView -> ExceptT (Reason IssueOrdersError) (ReaderT GameId Server) (IssueOrdersOutput, SomeGame)
         issueOrders' gameStateView = case gameStateView of
             GameNotStartedView -> throwE (domainReason IssueOrdersGameNotStarted)
-            GameStartedView _ (SomeGame someGame) _ _ _ _ -> case (someGame, issuedOrders) of
+            GameStartedView _ (AtLeast (VCons (SomeGame someGame) VNil) _) _ _ _ -> case (someGame, issuedOrders) of
                 (TypicalGame TypicalRoundOne Unresolved x y z, Typical os) -> issueOrders'' os someGame
                 (RetreatGame RetreatRoundOne Unresolved _ _ _ _ _, Retreat os) -> issueOrders'' os someGame
                 (TypicalGame TypicalRoundTwo Unresolved x y z, Typical os) -> issueOrders'' os someGame
@@ -107,7 +110,7 @@ resource = mkResourceId
 
         issueOrders''
             :: forall round .
-               [(GreatPower, Order (RoundPhase round))]
+               [(GreatPower, SomeOrder (RoundPhase round))]
             -> Game round RoundUnresolved
             -> ExceptT (Reason IssueOrdersError) (ReaderT GameId Server) (IssueOrdersOutput, SomeGame)
         issueOrders'' orders game = return $ case game of
@@ -117,15 +120,15 @@ resource = mkResourceId
             RetreatGame RetreatRoundTwo _ _ _ _ _ _ -> (IssueOrdersOutputRetreat, SomeGame . snd $ Game.issueOrders ordersMap game)
             AdjustGame AdjustRound _ _ _ _ -> (IssueOrdersOutputAdjust, SomeGame . snd $ Game.issueOrders ordersMap game)
           where
-            ordersMap :: M.Map Zone (Aligned Unit, SomeOrderObject (RoundPhase round))
+            ordersMap :: M.Map Zone (Aligned Unit, DOO.SomeOrderObject (RoundPhase round))
             ordersMap = foldr insertOrder M.empty orders
             insertOrder
-                :: (GreatPower, Order (RoundPhase round))
-                -> M.Map Zone (Aligned Unit, SomeOrderObject (RoundPhase round))
-                -> M.Map Zone (Aligned Unit, SomeOrderObject (RoundPhase round))
+                :: (GreatPower, SomeOrder (RoundPhase round))
+                -> M.Map Zone (Aligned Unit, DOO.SomeOrderObject (RoundPhase round))
+                -> M.Map Zone (Aligned Unit, DOO.SomeOrderObject (RoundPhase round))
             insertOrder (greatPower, order) = case order of
-                Order (DO.Order (subject, object)) ->
-                    M.insert (Zone (subjectProvinceTarget subject)) (align (subjectUnit subject) (outGreatPower greatPower), SomeOrderObject object)
+                SomeOrder (DO.SomeOrder (DO.Order (subject, object))) ->
+                    M.insert (Zone (subjectProvinceTarget subject)) (align (subjectUnit subject) (outGreatPower greatPower), DOO.SomeOrderObject object)
 
 -- Order inputs look something like this:
 --
@@ -134,9 +137,9 @@ resource = mkResourceId
 -- It's important that we accept orders for multiple great powers, since one
 -- player may control more than one great power.
 data IssuedOrders where
-    Typical :: [(GreatPower, Order Phase.Typical)] -> IssuedOrders
-    Retreat :: [(GreatPower, Order Phase.Retreat)] -> IssuedOrders
-    Adjust :: [(GreatPower, Order Phase.Adjust)] -> IssuedOrders
+    Typical :: [(GreatPower, SomeOrder Phase.Typical)] -> IssuedOrders
+    Retreat :: [(GreatPower, SomeOrder Phase.Retreat)] -> IssuedOrders
+    Adjust :: [(GreatPower, SomeOrder Phase.Adjust)] -> IssuedOrders
 
 deriving instance Generic IssuedOrders
 deriving instance Typeable IssuedOrders

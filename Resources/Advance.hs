@@ -27,6 +27,8 @@ import Control.Monad.Trans.Reader
 import Control.Monad.Trans.Except
 import Control.Monad.State.Class as SC
 import qualified Data.Map as M
+import Data.AtLeast
+import Data.TypeNat.Vect
 import Data.Aeson
 import Data.JSON.Schema
 import Rest
@@ -63,56 +65,61 @@ resource = mkResourceId
     modifier :: GameState -> ExceptT (Reason AdvanceError) (ReaderT GameId Server) GameState
     modifier gameState = case gameState of
         GameNotStarted _ _ _ -> throwE (domainReason AdvanceGameNotStarted)
-        GameStarted m someGame someResolved duration duration' elapsed -> do
+        GameStarted m (AtLeast (VCons someGame VNil) rest) duration duration' elapsed -> do
             state <- SC.get
-            let (nextGame, resolved) = advance someGame
-            return (GameStarted m nextGame (Just resolved) duration duration' (currentTime state))
+            let nextGame = advance someGame
+            return (GameStarted m (AtLeast (VCons nextGame VNil) (someGame : rest)) duration duration' (currentTime state))
 
 -- | Advance a game, resolving and then continuing, so that we also go from
 --   Unresolved to Unresolved. Retreat and Adjust phases in which there is
---   nothing to do are skipped.
-advance :: SomeGame -> (SomeGame, SomeResolvedOrders)
+--   nothing to do are skipped, but they are not forgotten! They're given
+--   in the return value.
+advance :: SomeGame -> SomeGame
+advance (SomeGame game) = SomeGame (continue (resolve game))
+{-
 advance (SomeGame game) = case game of
     TypicalGame TypicalRoundOne Unresolved _ _ _ ->
         let resolved = resolve game
             continued = continue resolved
-            resolvedOrders = gameZonedResolvedOrders resolved
         in  case M.size (gameDislodged continued) of
                 -- Automatically skip retreat phases where nobody is
                 -- dislodged.
                 0 -> advance (SomeGame continued)
-                _ -> (SomeGame continued, SomeResolvedOrders resolvedOrders)
+                _ -> AtLeast (VCons (SomeGame continued) VNil) []
     TypicalGame TypicalRoundTwo Unresolved _ _ _ ->
         let resolved = resolve game
             continued = continue resolved
-            resolvedOrders = gameZonedResolvedOrders resolved
         in  case M.size (gameDislodged continued) of
                 -- Automatically skip retreat phases where nobody is
                 -- dislodged.
                 0 -> advance (SomeGame continued)
-                _ -> (SomeGame continued, SomeResolvedOrders resolvedOrders)
+                _ -> SomeGame continued
     RetreatGame RetreatRoundOne Unresolved _ _ _ _ _ ->
         let resolved = resolve game
             continued = continue resolved
-            resolvedOrders = gameZonedResolvedOrders resolved
-        in  (SomeGame continued, SomeResolvedOrders resolvedOrders)
+        in  SomeGame continued
     RetreatGame RetreatRoundTwo Unresolved _ _ _ _ _ ->
         let resolved = resolve game
             continued = continue resolved
-            resolvedOrders = gameZonedResolvedOrders resolved
             occupation = gameOccupation continued
             control = gameControl continued
             defecits = fmap (\greatPower -> supplyCentreDefecit greatPower occupation control) [minBound..maxBound]
         in  if all (== 0) defecits
-            -- Automatically skip adjust phases where nobody has a defecit,
+            -- Automatically skip adjust phases where nobody has a deficit,
             -- positive or negative.
+            -- TODO must also check that, in case there's a negative
+            -- deficit, this great power actually has a place to build.
+            -- Really, we ought to use the order synthesizers to see whether
+            -- any player actually has a choice. That goes for typical
+            -- phase as well; it's rare, but it could happen, maybe?
+            -- No, that would cause infinite loop behaviour in advance.
             then advance (SomeGame continued)
-            else (SomeGame continued, SomeResolvedOrders resolvedOrders)
+            else SomeGame continued
     AdjustGame _ Unresolved _ _ _ ->
         let resolved = resolve game
             continued = continue resolved
-            resolvedOrders = gameZonedResolvedOrders resolved
-        in  (SomeGame continued, SomeResolvedOrders resolvedOrders)
+        in  SomeGame continued
+-}
 
 data AdvanceError = AdvanceGameNotStarted
 

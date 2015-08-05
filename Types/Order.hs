@@ -18,13 +18,14 @@ Portability : non-portable (GHC only)
 
 module Types.Order (
 
-      Order(..)
+      SomeOrder(..)
+    , SomeOrderObject(..)
 
-    , parseOrderTypical
-    , parseOrderRetreat
-    , parseOrderAdjust
+    , parseSomeOrderTypical
+    , parseSomeOrderRetreat
+    , parseSomeOrderAdjust
 
-    , printOrder
+    , printSomeOrder
     , printObject
 
     ) where
@@ -38,47 +39,80 @@ import Text.Parsec hiding ((<|>))
 import Text.Parsec.Text
 import Diplomacy.Phase
 import Diplomacy.OrderType
-import Diplomacy.Order hiding (Order(..))
+import Diplomacy.Order hiding (Order(..), SomeOrder(..))
 import qualified Diplomacy.Order as DO
-import Diplomacy.OrderObject
+import qualified Diplomacy.OrderObject as DOO
 import Diplomacy.Subject
 import Diplomacy.Province
 import Diplomacy.Unit
 
-data Order (phase :: Phase) where
-    Order :: DO.Order phase order -> Order phase
+newtype SomeOrderObject (phase :: Phase) = SomeOrderObject {
+      outSomeOrderObject :: DOO.SomeOrderObject phase
+    }
 
-deriving instance Show (Order phase)
+deriving instance Show (SomeOrderObject phase)
 
-instance JSONSchema (Order phase) where
+instance JSONSchema (SomeOrderObject phase) where
     schema _ = Value (LengthBound Nothing Nothing)
 
-instance ToJSON (Order phase) where
-    toJSON = String . printOrder
+instance ToJSON (SomeOrderObject phase) where
+    toJSON (SomeOrderObject (DOO.SomeOrderObject object)) = String (printObject object)
 
-instance FromJSON (Order Typical) where
-    parseJSON (String txt) = case parse parseOrderTypical "" txt of
+instance FromJSON (SomeOrderObject Typical) where
+    parseJSON (String txt) = case parse parseObjectTypical "" txt of
+        Left _ -> empty
+        Right x -> return (SomeOrderObject x)
+    parseJSON _ = empty
+
+instance FromJSON (SomeOrderObject Retreat) where
+    parseJSON (String txt) = case parse parseObjectRetreat "" txt of
+        Left _ -> empty
+        Right x -> return (SomeOrderObject x)
+    parseJSON _ = empty
+
+instance FromJSON (SomeOrderObject Adjust) where
+    parseJSON (String txt) = case parse parseObjectAdjust "" txt of
+        Left _ -> empty
+        Right x -> return (SomeOrderObject x)
+    parseJSON _ = empty
+
+newtype SomeOrder (phase :: Phase) = SomeOrder {
+      outSomeOrder :: DO.SomeOrder phase
+    }
+
+deriving instance Show (SomeOrder phase)
+deriving instance Eq (SomeOrder phase)
+deriving instance Ord (SomeOrder phase)
+
+instance JSONSchema (SomeOrder phase) where
+    schema _ = Value (LengthBound Nothing Nothing)
+
+instance ToJSON (SomeOrder phase) where
+    toJSON = String . printSomeOrder
+
+instance FromJSON (SomeOrder Typical) where
+    parseJSON (String txt) = case parse parseSomeOrderTypical "" txt of
         Left _ -> empty
         Right x -> return x
     parseJSON _ = empty
 
-instance FromJSON (Order Retreat) where
-    parseJSON (String txt) = case parse parseOrderRetreat "" txt of
+instance FromJSON (SomeOrder Retreat) where
+    parseJSON (String txt) = case parse parseSomeOrderRetreat "" txt of
         Left _ -> empty
         Right x -> return x
     parseJSON _ = empty
 
-instance FromJSON (Order Adjust) where
-    parseJSON (String txt) = case parse parseOrderAdjust "" txt of
+instance FromJSON (SomeOrder Adjust) where
+    parseJSON (String txt) = case parse parseSomeOrderAdjust "" txt of
         Left _ -> empty
         Right x -> return x
     parseJSON _ = empty
 
-printOrder :: Order phase -> T.Text
-printOrder (Order order) = T.concat [
+printSomeOrder :: SomeOrder phase -> T.Text
+printSomeOrder (SomeOrder (DO.SomeOrder order)) = T.concat [
       printSubject (orderSubject order)
     , " "
-    , printObject (orderSubject order) (orderObject order)
+    , printObject (orderObject order)
     ]
 
 printSubject :: Subject -> T.Text
@@ -88,45 +122,42 @@ printSubject (unit, pt) = T.concat [
     , printProvinceTarget pt
     ]
 
-printObject :: Subject -> OrderObject phase order -> T.Text
-printObject subject object = case object of
-    MoveObject pt ->
-        if subjectProvinceTarget subject == pt
-        then "Hold"
-        else T.concat ["- ", printProvinceTarget pt]
-    SupportObject subj pt ->
+printObject :: DOO.OrderObject phase order -> T.Text
+printObject object = case object of
+    DOO.MoveObject pt -> T.concat ["- ", printProvinceTarget pt]
+    DOO.SupportObject subj pt ->
         if subjectProvinceTarget subj == pt
         then T.concat ["S ", printSubject subj]
         else T.concat ["S ", printSubject subj, " - ", printProvinceTarget pt]
-    ConvoyObject subj pt ->
+    DOO.ConvoyObject subj pt ->
         T.concat ["C ", printSubject subj, " - ", printProvinceTarget pt]
-    SurrenderObject -> "Surrender"
-    WithdrawObject pt ->
+    DOO.SurrenderObject -> "Surrender"
+    DOO.WithdrawObject pt ->
         T.concat ["- ", printProvinceTarget pt]
-    DisbandObject -> "Disband"
-    BuildObject -> "Build"
-    ContinueObject -> "Continue"
+    DOO.DisbandObject -> "Disband"
+    DOO.BuildObject -> "Build"
+    DOO.ContinueObject -> "Continue"
 
-parseOrderTypical :: Parser (Order Typical)
-parseOrderTypical = do
+parseSomeOrderTypical :: Parser (SomeOrder Typical)
+parseSomeOrderTypical = do
     subject <- parseSubject
     spaces
-    SomeOrderObject object <- parseObjectTypical subject
-    return $ Order (DO.Order (subject, object))
+    DOO.SomeOrderObject object <- parseObjectTypical
+    return $ SomeOrder (DO.SomeOrder (DO.Order (subject, object)))
 
-parseOrderRetreat :: Parser (Order Retreat)
-parseOrderRetreat = do
+parseSomeOrderRetreat :: Parser (SomeOrder Retreat)
+parseSomeOrderRetreat = do
     subject <- parseSubject
     spaces
-    SomeOrderObject object <- parseObjectRetreat
-    return $ Order (DO.Order (subject, object))
+    DOO.SomeOrderObject object <- parseObjectRetreat
+    return $ SomeOrder (DO.SomeOrder (DO.Order (subject, object)))
 
-parseOrderAdjust :: Parser (Order Adjust)
-parseOrderAdjust = do
+parseSomeOrderAdjust :: Parser (SomeOrder Adjust)
+parseSomeOrderAdjust = do
     subject <- parseSubject
     spaces
-    SomeOrderObject object <- parseObjectAdjust
-    return $ Order (DO.Order (subject, object))
+    DOO.SomeOrderObject object <- parseObjectAdjust
+    return $ SomeOrder (DO.SomeOrder (DO.Order (subject, object)))
 
 parseSubject :: Parser Subject
 parseSubject = do
@@ -135,43 +166,37 @@ parseSubject = do
     pt <- parseProvinceTarget
     return (unit, pt)
 
-parseObjectTypical :: Subject -> Parser (SomeOrderObject Typical)
-parseObjectTypical subject =
-        (SomeOrderObject <$> try (parseHold subject))
-    <|> (SomeOrderObject <$> try parseMove)
-    <|> (SomeOrderObject <$> try parseSupport)
-    <|> (SomeOrderObject <$> try parseConvoy)
+parseObjectTypical :: Parser (DOO.SomeOrderObject Typical)
+parseObjectTypical =
+        (DOO.SomeOrderObject <$> try parseMove)
+    <|> (DOO.SomeOrderObject <$> try parseSupport)
+    <|> (DOO.SomeOrderObject <$> try parseConvoy)
 
-parseObjectRetreat :: Parser (SomeOrderObject Retreat)
+parseObjectRetreat :: Parser (DOO.SomeOrderObject Retreat)
 parseObjectRetreat =
-        (SomeOrderObject <$> try parseSurrender)
-    <|> (SomeOrderObject <$> try parseWithdraw)
+        (DOO.SomeOrderObject <$> try parseSurrender)
+    <|> (DOO.SomeOrderObject <$> try parseWithdraw)
 
-parseObjectAdjust :: Parser (SomeOrderObject Adjust)
+parseObjectAdjust :: Parser (DOO.SomeOrderObject Adjust)
 parseObjectAdjust =
-        (SomeOrderObject <$> try parseDisband)
-    <|> (SomeOrderObject <$> try parseBuild)
-    <|> (SomeOrderObject <$> try parseContinue)
+        (DOO.SomeOrderObject <$> try parseDisband)
+    <|> (DOO.SomeOrderObject <$> try parseBuild)
+    <|> (DOO.SomeOrderObject <$> try parseContinue)
 
-parseHold :: Subject -> Parser (OrderObject Typical Move)
-parseHold subject = (string "Hold" <|> string "hold") *> object
-  where
-    object = pure (MoveObject (subjectProvinceTarget subject))
-
-parseMove :: Parser (OrderObject Typical Move)
+parseMove :: Parser (DOO.OrderObject Typical Move)
 parseMove = do
     char '-'
     spaces
     pt <- parseProvinceTarget
-    return $ MoveObject pt
+    return $ DOO.MoveObject pt
 
-parseSupport :: Parser (OrderObject Typical Support)
+parseSupport :: Parser (DOO.OrderObject Typical Support)
 parseSupport = do
     char 'S'
     spaces
     subject <- parseSubject
     target <- Text.Parsec.option (subjectProvinceTarget subject) (try rest)
-    return $ SupportObject subject target
+    return $ DOO.SupportObject subject target
   where
     rest = do
         spaces
@@ -179,7 +204,7 @@ parseSupport = do
         spaces
         parseProvinceTarget
 
-parseConvoy :: Parser (OrderObject Typical Convoy)
+parseConvoy :: Parser (DOO.OrderObject Typical Convoy)
 parseConvoy = do
     char 'C'
     spaces
@@ -188,31 +213,31 @@ parseConvoy = do
     char '-'
     spaces
     target <- parseProvinceTarget
-    return $ ConvoyObject subject target
+    return $ DOO.ConvoyObject subject target
 
-parseSurrender :: Parser (OrderObject Retreat Surrender)
+parseSurrender :: Parser (DOO.OrderObject Retreat Surrender)
 parseSurrender = do
     string "Surrender"
-    return $ SurrenderObject
+    return $ DOO.SurrenderObject
 
-parseWithdraw :: Parser (OrderObject Retreat Withdraw)
+parseWithdraw :: Parser (DOO.OrderObject Retreat Withdraw)
 parseWithdraw = do
     char '-'
     spaces
     pt <- parseProvinceTarget
-    return $ WithdrawObject pt
+    return $ DOO.WithdrawObject pt
 
-parseDisband :: Parser (OrderObject Adjust Disband)
+parseDisband :: Parser (DOO.OrderObject Adjust Disband)
 parseDisband = do
     string "Disband"
-    return $ DisbandObject
+    return $ DOO.DisbandObject
 
-parseBuild :: Parser (OrderObject Adjust Build)
+parseBuild :: Parser (DOO.OrderObject Adjust Build)
 parseBuild = do
     string "Build"
-    return $ BuildObject
+    return $ DOO.BuildObject
 
-parseContinue :: Parser (OrderObject Adjust Continue)
+parseContinue :: Parser (DOO.OrderObject Adjust Continue)
 parseContinue = do
     string "Continue"
-    return $ ContinueObject
+    return $ DOO.ContinueObject

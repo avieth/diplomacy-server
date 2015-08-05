@@ -27,6 +27,8 @@ import Data.Typeable
 import qualified Data.Map as M
 import qualified Data.Set as S
 import Data.Stream as Stream
+import Data.AtLeast
+import Data.TypeNat.Vect
 import Data.Aeson
 import Data.JSON.Schema
 import Data.Functor.Identity
@@ -91,12 +93,12 @@ startGameState t randomDoubles game = case game of
         then Left NotEnoughPlayers
         else if tooManyPlayers
         then Left TooManyPlayers
-        else Right (GameStarted map' (SomeGame newGame) Nothing duration duration' t)
+        else Right (GameStarted map' (AtLeast (VCons (SomeGame newGame) VNil) []) duration duration' t)
       where
         registered :: [(Username, Password)]
         registered = fmap (\(x, y) -> (x, UD.password y)) (M.toList map)
         registeredRandomOrder :: [(Username, Password)]
-        registeredRandomOrder = fmap fst (sortBy (\(_, x) (_, y) -> x `compare` y) (Prelude.zip registered (toList randomDoubles)))
+        registeredRandomOrder = fmap fst (sortBy (\(_, x) (_, y) -> x `compare` y) (Prelude.zip registered (Stream.toList randomDoubles)))
         controlUnits :: [S.Set GreatPower]
         controlUnits = case length registered of
             7 -> fmap S.singleton [minBound..maxBound]
@@ -113,7 +115,7 @@ startGameState t randomDoubles game = case game of
         makeUserData :: ((Username, Password), S.Set GreatPower) -> (Username, UserData S.Set)
         makeUserData ((u, p), s) = (u, UserData p s)
         map' = M.fromList (fmap makeUserData assignments)
-    GameStarted _ _ _ _ _ _ -> Left GameAlreadyStarted
+    GameStarted _ _ _ _ _ -> Left GameAlreadyStarted
 
 newtype StartGameInput = StartGameInput Credentials
 

@@ -10,6 +10,7 @@ Portability : non-portable (GHC only)
 
 {-# LANGUAGE AutoDeriveTypeable #-}
 {-# LANGUAGE RankNTypes #-}
+{-# LANGUAGE GADTs #-}
 
 import Control.Applicative
 import Control.Concurrent
@@ -18,6 +19,8 @@ import Control.Concurrent.STM
 import Control.Concurrent.STM.TVar
 import Control.Monad.Trans.Reader
 import qualified Data.Map as M
+import Data.AtLeast
+import Data.TypeNat.Vect
 import Data.Monoid
 import Data.Hourglass
 import System.Hourglass
@@ -40,6 +43,8 @@ import Resources.Join as Join
 import Resources.Start as Start
 import Resources.Order as Order
 import Resources.Advance as Advance
+import Resources.Metadata as Metadata
+import Resources.Resolution as Resolution
 import Resources.Client as Client
 
 main :: IO ()
@@ -102,7 +107,7 @@ advanceDaemon tvar = do
         -> ([GameId], M.Map GameId (Password, GameState))
         -> ([GameId], M.Map GameId (Password, GameState))
     advanceGameFold t gameId (pwd, gameState) (ids, out) = case gameState of
-        GameStarted m (SomeGame game) resolved duration duration' elapsed ->
+        GameStarted m (AtLeast (VCons (SomeGame game) VNil) rest) duration duration' elapsed ->
             let Elapsed t' = t - elapsed 
                 (observedDuration, _) = fromSeconds t'
                 thresholdDuration = case game of
@@ -110,9 +115,9 @@ advanceDaemon tvar = do
                     RetreatGame _ _ _ _ _ _ _ -> duration'
                     AdjustGame _ _ _ _ _ -> duration'
             in  if observedDuration > thresholdDuration
-                then let (someGame', someResolvedOrders) = Advance.advance (SomeGame game)
-                     in  (gameId : ids, M.insert gameId (pwd, GameStarted m someGame' (Just someResolvedOrders) duration duration' t) out)
-                else (ids, M.insert gameId (pwd, GameStarted m (SomeGame game) resolved duration duration' elapsed) out)
+                then let nextGame = Advance.advance (SomeGame game)
+                     in  (gameId : ids, M.insert gameId (pwd, GameStarted m (AtLeast (VCons nextGame VNil) ((SomeGame game) : rest)) duration duration' t) out)
+                else (ids, M.insert gameId (pwd, GameStarted m (AtLeast (VCons (SomeGame game) VNil) rest) duration duration' elapsed) out)
         _ -> (ids, M.insert gameId (pwd, gameState) out)
 
 api = [(mkVersion 1 0 0, Some1 router)]
@@ -122,6 +127,8 @@ router = root -/ client --/ game ---/ gameJoin
                                  ---/ gameStart
                                  ---/ gameOrder
                                  ---/ gameAdvance
+                                 ---/ gameMetadata
+                                 ---/ gameResolution
                         --/ admin
 
 
@@ -139,6 +146,12 @@ gameOrder = route Order.resource
 
 gameAdvance :: Router (ReaderT GameId Server) (ReaderT GameId Server)
 gameAdvance = route Advance.resource
+
+gameMetadata :: Router (ReaderT GameId Server) (ReaderT GameId Server)
+gameMetadata = route Metadata.resource
+
+gameResolution :: Router (ReaderT GameId Server) (ReaderT GameId Server)
+gameResolution = route Resolution.resource
 
 client :: Router Server Server
 client = route Client.resource

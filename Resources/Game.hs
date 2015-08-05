@@ -26,12 +26,15 @@ import qualified Data.Map as M
 import Data.Hourglass
 import Rest
 import Rest.Resource as R
+import Rest.Dictionary.Types
 import Types.Server
 import Types.GameId
 import Types.Credentials
 import Types.GameState
 import Resources.Game.Create as Create
 import Resources.Game.Remove as Remove
+import Diplomacy.Game
+import Diplomacy.Turn
 
 -- | The game resource will use a string identifier to pick out a game, and
 --   give methods
@@ -60,9 +63,49 @@ resource = mkResourceReader
   where
 
     get :: Handler (ReaderT GameId Server)
-    get = secureHandler $ mkIdHandler (jsonO . jsonE . jsonI) $ \credentials gameId -> doGet credentials gameId
-    doGet :: Credentials -> GameId -> ExceptT (Reason Void) (ReaderT GameId Server) GameStateView
-    doGet credentials gameId = withUserCredentialsForGame credentials gameId return
+    get = secureHandler $ mkHandler (addPar roundParam . mkPar turnParam . jsonO . jsonE . jsonI) handler
+
+    turnParam :: Param (Maybe Turn)
+    turnParam = Param ["turn"] $ \xs -> case xs of
+        (Just x : _) -> case reads x :: [(Int, String)] of
+            [(i, [])] -> case turnFromInt i of
+                Just t -> Right (Just t)
+                _ -> Left (ParseError "Could not parse turn")
+            _ -> Left (ParseError "Could not parse turn")
+        [Nothing] -> Right Nothing
+        _ -> Left (ParseError "Could not parse turn")
+
+    roundParam :: Param (Maybe Round)
+    roundParam = Param ["round"] $ \xs -> case xs of
+        (Just x : _) -> case reads x :: [(Int, String)] of
+            [(i, [])] -> let min = minBound :: Round
+                             max = maxBound :: Round
+                         in  if i >= fromEnum min && i <= fromEnum max
+                             then Right (Just (toEnum i))
+                             else Left (ParseError "Could not parse round")
+            _ -> Left (ParseError "Could not parse round")
+        [Nothing] -> Right Nothing
+        _ -> Left (ParseError "Could not parse round")
+
+    handler :: Env h (Maybe Round, Maybe Turn) Credentials -> ExceptT (Reason Void) (ReaderT GameId Server) (Maybe GameData)
+    handler env =
+        let credentials = input env
+            (maybeRound, maybeTurn) = param env
+        in  lift ask >>= \gameId -> doGet credentials gameId maybeTurn maybeRound
+
+    doGet
+        :: Credentials
+        -> GameId
+        -> Maybe Turn
+        -> Maybe Round
+        -> ExceptT (Reason Void) (ReaderT GameId Server) (Maybe GameData)
+    doGet credentials gameId maybeTurn maybeRound = withUserCredentialsForGame credentials gameId f
+      where
+        f gameStateView = return $ do
+            metadata <- gameStateViewMetadata gameStateView
+            let turn = maybe (metadataTurn metadata) id maybeTurn
+            let round = maybe (metadataRound metadata) id maybeRound
+            gameStateViewData turn round gameStateView
 
     listing :: ListHandler Server
     listing = mkListing (stringO) $ \_ -> lift doListing

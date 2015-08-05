@@ -14,15 +14,22 @@ Portability : non-portable (GHC only)
 {-# LANGUAGE DataKinds #-}
 {-# LANGUAGE DeriveGeneric #-}
 {-# LANGUAGE StandaloneDeriving #-}
+{-# LANGUAGE FlexibleInstances #-}
+{-# LANGUAGE ScopedTypeVariables #-}
 
 module Types.GameState (
 
       SomeGame(..)
-    , SomeResolvedOrders(..)
     , GameState(..)
     , GameStateView(..)
+    , GameMetadata(..)
+    , GameData(..)
+    , GameResolution(..)
 
     , gameStateMatchCredentials
+    , gameStateViewMetadata
+    , gameStateViewData
+    , gameStateViewResolution
 
     ) where
 
@@ -33,6 +40,8 @@ import Control.Applicative
 import qualified Data.Map as M
 import qualified Data.Set as S
 import qualified Data.Text as T
+import Data.AtLeast
+import Data.TypeNat.Nat
 import Data.Functor.Identity
 import Data.Functor.Constant
 import Data.Hourglass
@@ -44,10 +53,13 @@ import Diplomacy.Province
 import Diplomacy.Zone
 import Diplomacy.Aligned
 import Diplomacy.Phase
-import Diplomacy.OrderObject
+import qualified Diplomacy.Order as DO
+import qualified Diplomacy.OrderObject as DOO
 import Diplomacy.OrderResolution
 import qualified Diplomacy.Unit as DU
 import qualified Diplomacy.GreatPower as DGP
+import Diplomacy.Control
+import Diplomacy.Occupation
 import Types.Credentials as Cred
 import Types.UserData as UD
 import Types.Credentials (Username)
@@ -57,11 +69,6 @@ import Types.Order
 
 data SomeGame where
     SomeGame :: Game round RoundUnresolved -> SomeGame
-
-data SomeResolvedOrders where
-    SomeResolvedOrders
-        :: M.Map Zone (Aligned DU.Unit, SomeResolved OrderObject phase)
-        -> SomeResolvedOrders
 
 data GameState where
 
@@ -75,8 +82,10 @@ data GameState where
         :: M.Map Username (UserData S.Set)
         -- ^ we use Set rather than Identity, because one player can control
         --   more than one great power!
-        -> SomeGame
-        -> Maybe SomeResolvedOrders
+        -> AtLeast One SomeGame
+        -- ^ All (unresolved) game states seen so far. First entry is the
+        --   latest, and other entires retain the orders which were present
+        --   when the game was advanced.
         -> Duration
         -- ^ Period of this game; after this duration, the game advances to the
         --   next round if it's in typical phase.
@@ -97,238 +106,227 @@ data GameStateView where
     GameNotStartedView :: GameStateView
     GameStartedView
         :: S.Set DGP.GreatPower
-        -> SomeGame
-        -> Maybe SomeResolvedOrders
+        -> AtLeast One SomeGame
         -> Duration
         -> Duration
         -> Elapsed
         -> GameStateView
 
--- | This show instance is useful for debugging but should not be exposed
---   to clients, as it shows all orders of all great powers!
-instance Show GameStateView where
-    show gameStateView = case gameStateView of
-        GameNotStartedView -> "Game not started"
-        GameStartedView greatPowers (SomeGame game) someResolved duration duration' elapsed ->
-            concat [
-              show greatPowers
-            , "\n"
-            , showGame game
-            ]
-
--- | Dumping a GameStateView to JSON...
---
---   {
---     tag : 'GameNotStartedView' | 'GameStartedView'
---   , components : {} | {
---       metadata : <metadata>
---     , greatPowers : [GreatPower]
---     , occupation : <occupation/orders>
---     , dislodgement : <dislodgement/orders>
---     , control : <control>
---     ]
---   }
-instance ToJSON GameStateView where
-    toJSON gameStateView = case gameStateView of
-        GameNotStartedView -> object ["tag" .= ("GameNotStarted" :: T.Text)]
-        GameStartedView greatPowers (SomeGame game) maybeResolved duration duration' elapsed -> object [
-              "tag" .= ("GameStarted" :: T.Text)
-            , "components" .= object [
-                "metadata" .= object [
-                  "turn" .= turn
-                , "round" .= round
-                , "durationHours" .= hours
-                , "durationMinutes" .= minutes
-                , "secondDurationHours" .= secondHours
-                , "secondDurationMinutes" .= secondMinutes
-                , "elapsed" .= seconds
-                ]
-              -- We throw our GreatPower newtype over the
-              -- Diplomacy.GreatPower.GreatPower types so that we can ToJSON
-              -- this set.
-              , "greatPowers" .= S.map GreatPower greatPowers
-              , "occupation" .= occupation
-              , "dislodgement" .= dislodgement
-              , "control" .= control
-              , "resolved" .= resolved
-              ]
-            ]
-          where
-
-            -- Turn is 0-indexed.
-            turn = turnToInt (gameTurn game)
-            -- Round is 0-indexed.
-            round = roundToInt (gameRound game)
-            -- We only show the duration up to the minute.
-            -- These (hours and minutes) are Int64. Can't be bothered to
-            -- import that so I can write the type signature.
-            Hours hours = durationHours duration
-            Minutes minutes = durationMinutes duration
-            -- seconds is an Int64 giving unix time when the game was last
-            -- advanced (or started, in case it's round 1 turn 1).
-            Elapsed (Seconds seconds) = elapsed
-            Hours secondHours = durationHours duration'
-            Minutes secondMinutes = durationMinutes duration'
-
-            -- The third component is the order object, but due to my own
-            -- personal lethargy I have decided to dump it to T.Text via
-            -- printObject (from Types.Order) instead of giving it a wrapper
-            -- and a ToJSON instance.
-            occupation :: M.Map T.Text (GreatPower, Unit, Maybe T.Text)
-            occupation = case game of
-                TypicalGame TypicalRoundOne Unresolved _ _ _ ->
-                    M.foldWithKey typicalOccupationFold M.empty (gameZonedOrders game)
-                TypicalGame TypicalRoundTwo Unresolved _ _ _ ->
-                    M.foldWithKey typicalOccupationFold M.empty (gameZonedOrders game)
-                RetreatGame _ _ _ _ _ _ _ ->
-                    M.foldWithKey occupationFold M.empty (gameOccupation game)
-                AdjustGame AdjustRound _ _ _ _ ->
-                    M.foldWithKey adjustOccupationFold M.empty (gameZonedOrders game)
-
-            typicalOccupationFold
-                :: Zone
-                -> (Aligned DU.Unit, SomeOrderObject Typical)
-                -> M.Map T.Text (GreatPower, Unit, Maybe T.Text)
-                -> M.Map T.Text (GreatPower, Unit, Maybe T.Text)
-            typicalOccupationFold zone (aunit, SomeOrderObject object) = M.insert key (greatPower, unit, orderObjectText)
-              where
-                unit = Unit (alignedThing aunit)
-                dgpGreatPower = alignedGreatPower aunit
-                greatPower = GreatPower dgpGreatPower
-                key = printProvinceTarget (zoneProvinceTarget zone)
-                subject = (alignedThing aunit, zoneProvinceTarget zone)
-                orderObjectText :: Maybe T.Text
-                orderObjectText = do
-                    guard (dgpGreatPower `S.member` greatPowers)
-                    return $ printObject subject object
-
-            adjustOccupationFold
-                :: Zone
-                -> (Aligned DU.Unit, SomeOrderObject Adjust)
-                -> M.Map T.Text (GreatPower, Unit, Maybe T.Text)
-                -> M.Map T.Text (GreatPower, Unit, Maybe T.Text)
-            adjustOccupationFold zone (aunit, SomeOrderObject object) = M.insert key (greatPower, unit, orderObjectText)
-              where
-                unit = Unit (alignedThing aunit)
-                dgpGreatPower = alignedGreatPower aunit
-                greatPower = GreatPower dgpGreatPower
-                key = printProvinceTarget (zoneProvinceTarget zone)
-                subject = (alignedThing aunit, zoneProvinceTarget zone)
-                orderObjectText :: Maybe T.Text
-                orderObjectText = do
-                    guard (dgpGreatPower `S.member` greatPowers)
-                    return $ printObject subject object
-
-            occupationFold
-                :: Zone
-                -> Aligned DU.Unit
-                -> M.Map T.Text (GreatPower, Unit, Maybe T.Text)
-                -> M.Map T.Text (GreatPower, Unit, Maybe T.Text)
-            occupationFold zone aunit = M.insert key (greatPower, unit, Nothing)
-              where
-                key = printProvinceTarget (zoneProvinceTarget zone)
-                unit = Unit (alignedThing aunit)
-                greatPower = GreatPower (alignedGreatPower aunit)
-
-            dislodgement :: Maybe (M.Map T.Text (GreatPower, Unit, Maybe T.Text, Maybe Bool))
-            dislodgement = case game of
-                RetreatGame RetreatRoundOne Unresolved t _ _ _ _ ->
-                    Just $ M.foldWithKey (dislodgementFold Unresolved) M.empty (gameZonedOrders game)
-                RetreatGame RetreatRoundTwo Unresolved t _ _ _ _ ->
-                    Just $ M.foldWithKey (dislodgementFold Unresolved) M.empty (gameZonedOrders game)
-                _ -> Nothing
-
-            dislodgementFold
-                :: Status roundStatus
-                -> Zone
-                -> (Aligned DU.Unit, RoundOrderConstructor roundStatus Retreat)
-                -> M.Map T.Text (GreatPower, Unit, Maybe T.Text, Maybe Bool)
-                -> M.Map T.Text (GreatPower, Unit, Maybe T.Text, Maybe Bool)
-            dislodgementFold status zone (aunit, x) = M.insert key (greatPower, unit, orderObjectText, resolutionBool)
-              where
-                unit = Unit (alignedThing aunit)
-                dgpGreatPower = alignedGreatPower aunit
-                greatPower = GreatPower dgpGreatPower
-                key = printProvinceTarget (zoneProvinceTarget zone)
-                subject = (alignedThing aunit, zoneProvinceTarget zone)
-                orderObjectText :: Maybe T.Text
-                orderObjectText = case (status, x) of
-                    (Unresolved, SomeOrderObject object) -> do
-                        guard (dgpGreatPower `S.member` greatPowers)
-                        return $ printObject subject object
-                    (Resolved, SomeResolved (object, _)) -> Just $ printObject subject object
-                resolutionBool = case (status, x) of
-                    (Unresolved, _) -> Nothing
-                    (Resolved, SomeResolved (_, resolution)) -> Just $ maybe True (const False) resolution
-
-
-            control :: M.Map T.Text GreatPower
-            control = M.foldWithKey controlFold M.empty (gameControl game)
-            controlFold :: Province -> DGP.GreatPower -> M.Map T.Text GreatPower -> M.Map T.Text GreatPower
-            -- Here we are careful to wrap the DGP.GreatPower in our
-            -- JSON-able newtype of the same name.
-            controlFold p g = M.insert (printProvince p) (GreatPower g)
-
-            resolved :: M.Map T.Text (GreatPower, Unit, Bool)
-            resolved = case maybeResolved of
-                Just (SomeResolvedOrders map) ->
-                    M.foldWithKey resolvedFold M.empty map
-                _ -> M.empty
-
-            resolvedFold
-                :: Zone
-                -> (Aligned DU.Unit, SomeResolved OrderObject phase)
-                -> M.Map T.Text (GreatPower, Unit, Bool)
-                -> M.Map T.Text (GreatPower, Unit, Bool)
-            resolvedFold zone (aunit, SomeResolved (object, resolution)) =
-                M.insert key (greatPower, unit, succeeded)
-              where
-                key = printProvinceTarget (zoneProvinceTarget zone)
-                greatPower = GreatPower (alignedGreatPower aunit)
-                unit = Unit (alignedThing aunit)
-                succeeded = maybe True (const False) resolution
-
-instance FromJSON GameStateView where
-    parseJSON v = fail "FromJSON GameStateView not implemented"
-
-instance JSONSchema GameStateView where
-    schema _ = Choice [notStartedSchema, startedSchema]
+gameStateViewMetadata :: GameStateView -> Maybe GameMetadata
+gameStateViewMetadata view = case view of
+    GameNotStartedView -> Nothing
+    GameStartedView greatPowers games duration secondDuration elapsed -> Just $ GameMetadata {
+          metadataGreatPowers = S.map GreatPower greatPowers
+        , metadataTurn = turn
+        , metadataRound = round
+        , metadataDuration = duration
+        , metadataSecondDuration = secondDuration
+        , metadataElapsed = elapsed
+        }
       where
-        notStartedSchema = Schema.Object [
-              Field "tag" True (Value (LengthBound (Just l) (Just l)))
+        game = Data.AtLeast.head games
+        turn = case game of
+            SomeGame game -> gameTurn game
+        round = case game of
+            SomeGame game -> gameRound game
+
+-- | Number of places from the back of a list of SomeGame at which the game
+--   for this turn and round is found.
+gameIndex :: Turn -> Round -> Int
+gameIndex turn round = roundToInt round + 5*(turnToInt turn)
+
+findGame :: Turn -> Round -> AtLeast One SomeGame -> Maybe SomeGame
+findGame turn round games =
+    let gamesList = Data.AtLeast.toList games
+        index = gameIndex turn round
+    in  findGame' index (reverse gamesList)
+  where
+    findGame' :: Int -> [SomeGame] -> Maybe SomeGame
+    findGame' n games = case games of
+        [] -> Nothing
+        (x : xs) -> if n == 0 then Just x else findGame' (n-1) xs
+
+-- Careful! This will give the resolved orders for any turn/round pair found,
+-- even if it's the latest (ongoing) game! The client-facing code must be
+-- careful not to fulfill a user's request for the resolutions of the latest
+-- round.
+gameStateViewResolution :: Turn -> Round -> GameStateView -> Maybe GameResolution
+gameStateViewResolution turn round view = case view of
+    GameNotStartedView -> Nothing
+    GameStartedView _ games _ _ _ -> case findGame turn round games of
+        Nothing -> Nothing
+        Just (SomeGame game) -> Just $ case resolve game of
+            TypicalGame _ _ _ zonedResolvedOrders _ -> GameResolutionTypical (M.map mapper zonedResolvedOrders)
+            RetreatGame _ _ _ _ zonedResolvedOrders _ _ -> GameResolutionRetreat (M.map mapper zonedResolvedOrders)
+            AdjustGame _ _ _ zonedResolvedOrders _ -> GameResolutionAdjust (M.map mapper zonedResolvedOrders)
+  where
+    mapper
+        :: (Aligned DU.Unit, SomeResolved DOO.OrderObject phase)
+        -> (Aligned Unit, SomeOrderObject phase, Bool)
+    mapper (aunit, SomeResolved (object, res)) = (align unit greatPower, someObject, bool)
+      where
+        greatPower = alignedGreatPower aunit
+        unit = Unit (alignedThing aunit)
+        someObject = SomeOrderObject (DOO.SomeOrderObject object)
+        bool = case res of
+            Nothing -> True
+            _ -> False
+
+gameStateViewData :: Turn -> Round -> GameStateView -> Maybe GameData
+gameStateViewData turn round view = case view of
+    GameNotStartedView -> Nothing
+    GameStartedView greatPowers games _ _ _ -> case findGame turn round games of
+        Nothing -> Nothing
+        Just (SomeGame game) -> Just $ case game of
+            TypicalGame _ _ _ zonedOrders control -> GameDataTypical (M.map (mapper greatPowers) zonedOrders) (M.map GreatPower control)
+            RetreatGame _ _ _ _ zonedOrders occupation control -> GameDataRetreat (M.map (mapper greatPowers) zonedOrders) (M.map (fmap Unit) occupation) (M.map GreatPower control)
+            AdjustGame _ _ _ zonedOrders control -> GameDataAdjust (M.map (mapper greatPowers) zonedOrders) (M.map GreatPower control)
+  where
+    mapper
+        :: S.Set DGP.GreatPower
+        -> (Aligned DU.Unit, DOO.SomeOrderObject phase)
+        -> (Aligned Unit, Maybe (SomeOrderObject phase))
+    mapper greatPowers (aunit, someOrderObject) = (align unit greatPower, maybeSomeOrderObject)
+      where
+        greatPower = alignedGreatPower aunit
+        unit = Unit (alignedThing aunit)
+        maybeSomeOrderObject = case S.member greatPower greatPowers of
+            True -> Just (SomeOrderObject someOrderObject)
+            False -> Nothing
+
+data GameMetadata = GameMetadata {
+      metadataGreatPowers :: S.Set GreatPower
+    , metadataTurn :: Turn
+    , metadataRound :: Round
+    , metadataDuration :: Duration
+    , metadataSecondDuration :: Duration
+    , metadataElapsed :: Elapsed
+    }
+
+instance ToJSON GameMetadata where
+    toJSON metadata = object [
+          "greatPowers" .= greatPowers
+        , "turn" .= turn
+        , "round" .= round
+        , "duration" .= duration
+        , "secondDuration" .= secondDuration
+        , "elapsed" .= secondsElapsed
+        ]
+      where
+        greatPowers = metadataGreatPowers metadata
+        turn = turnToInt (metadataTurn metadata)
+        round = roundToInt (metadataRound metadata)
+        -- We only show the duration up to the minute.
+        -- These (hours and minutes) are Int64. Can't be bothered to
+        -- import that so I can write the type signature.
+        Hours hours = durationHours (metadataDuration metadata)
+        Minutes minutes = durationMinutes (metadataDuration metadata)
+        Hours secondHours = durationHours (metadataSecondDuration metadata)
+        Minutes secondMinutes = durationMinutes (metadataSecondDuration metadata)
+        -- seconds is an Int64 giving unix time when the game was last
+        -- advanced (or started, in case it's round 1 turn 1).
+        Elapsed (Seconds secondsElapsed) = metadataElapsed metadata
+        duration = object [
+              "hours" .= hours
+            , "minutes" .= minutes
             ]
-          where
-            l = length ("GameNotStarted" :: String)
-        startedSchema = Schema.Object [
-              Field "tag" True (Value (LengthBound (Just l) (Just l)))
-            , Field "components" True components
+        secondDuration = object [
+              "hours" .= secondHours
+            , "minutes" .= secondMinutes
             ]
-          where
-            l = length ("GameStarted" :: String)
-            components = Schema.Object [
-                  Field "metadata" True metadata
-                , Field "greatPowers" True greatPowers
-                , Field "occupation" True occupation
-                , Field "dislodgement" False dislodgement
-                , Field "control" True control
-                , Field "resolved" False resolved
-                ]
-            metadata = Schema.Object [
-                  Field "turn" True (Schema.Number (Bound (Just 0) Nothing))
-                , Field "round" True (Schema.Number (Bound (Just 0) (Just 4)))
-                , Field "durationHours" True (Schema.Number (Bound (Just 0) Nothing))
-                , Field "durationMinutes" True (Schema.Number (Bound (Just 0) Nothing))
-                , Field "secondDurationHours" True (Schema.Number (Bound (Just 0) Nothing))
-                , Field "secondDurationMinutes" True (Schema.Number (Bound (Just 0) Nothing))
-                , Field "elapsed" True (Schema.Number (Bound (Just 0) Nothing))
-                ]
-            greatPowers = Schema.Array (LengthBound (Just 1) (Just 3)) True (Value (LengthBound Nothing Nothing))
-            -- TODO can't be bothered to write these up... what a pain in the
-            -- ass. We'll just leave them as Any.
-            occupation = Schema.Any
-            dislodgement = Schema.Any
-            control = Schema.Any
-            resolved = Schema.Any
+
+-- TODO implement this.
+instance JSONSchema GameMetadata
+
+-- For now we give only a Bool to indicate success or failure (true for
+-- success). In the future we should give the reason. This is not super easy
+-- to do because we use GADTs with phase and order type parameters, so we
+-- can't just derive generic JSON instances.
+data GameResolution where
+    GameResolutionTypical
+        :: M.Map Zone (Aligned Unit, SomeOrderObject Typical, Bool)
+        -> GameResolution
+    GameResolutionRetreat
+        :: M.Map Zone (Aligned Unit, SomeOrderObject Retreat, Bool)
+        -> GameResolution
+    GameResolutionAdjust
+        :: M.Map Zone (Aligned Unit, SomeOrderObject Adjust, Bool)
+        -> GameResolution
+
+instance ToJSON GameResolution where
+    toJSON gameResolution = case gameResolution of
+        GameResolutionTypical map -> toJSON map
+        GameResolutionRetreat map -> toJSON map
+        GameResolutionAdjust map -> toJSON map
+
+-- TODO implement this
+instance JSONSchema GameResolution
+
+data GameData where
+    GameDataTypical
+        :: M.Map Zone (Aligned Unit, Maybe (SomeOrderObject Typical))
+        -> M.Map Province GreatPower
+        -> GameData
+    GameDataRetreat
+        :: M.Map Zone (Aligned Unit, Maybe (SomeOrderObject Retreat))
+        -> M.Map Zone (Aligned Unit)
+        -> M.Map Province GreatPower
+        -> GameData
+    GameDataAdjust
+        :: M.Map Zone (Aligned Unit, Maybe (SomeOrderObject Adjust))
+        -> M.Map Province GreatPower
+        -> GameData
+
+instance ToJSON GameData where
+    toJSON gameData = case gameData of
+        GameDataTypical zonedOrders control -> object [
+              "occupation" .= zonedOrders
+            , "control" .= control
+            ]
+        GameDataRetreat zonedOrders occupation control -> object [
+              "dislodgement" .= zonedOrders
+            , "occupation" .= occupation
+            , "control" .= control
+            ]
+        GameDataAdjust zonedOrders control -> object [
+              "occupation" .= zonedOrders
+            , "control" .= control
+            ]
+
+-- TODO implement this
+instance JSONSchema GameData
+
+instance ToJSON t => ToJSON (M.Map Zone t) where
+    toJSON map = toJSON textKeyedMap
+      where
+        textKeyedMap :: M.Map T.Text t
+        textKeyedMap = M.foldWithKey (\z x -> M.insert (zoneToText z) x) M.empty map
+        zoneToText :: Zone -> T.Text
+        zoneToText = printProvinceTarget . zoneProvinceTarget
+
+instance ToJSON t => ToJSON (M.Map Province t) where
+    toJSON map = toJSON textKeyedMap
+      where
+        textKeyedMap :: M.Map T.Text t
+        textKeyedMap = M.foldWithKey(\p x -> M.insert (printProvince p) x) M.empty map
+
+instance ToJSON (Aligned Unit) where
+    toJSON aunit = toJSON (greatPower, unit)
+      where
+        greatPower = GreatPower (alignedGreatPower aunit)
+        unit = alignedThing aunit
+
+instance ToJSON (Aligned Unit, Maybe (SomeOrderObject phase)) where
+    toJSON (aunit, maybeObject) = toJSON (greatPower, unit, maybeObject)
+      where
+        greatPower = GreatPower (alignedGreatPower aunit)
+        unit = alignedThing aunit
+
+instance ToJSON (Aligned Unit, SomeOrderObject phase, Bool) where
+    toJSON (aunit, object, bool) = toJSON (greatPower, unit, object, bool)
+      where
+        greatPower = GreatPower (alignedGreatPower aunit)
+        unit = alignedThing aunit
 
 -- | Get a GameStateView for given Credentials, i.e. the set of GreatPowers
 --   that this user controls, along with a SomeGame if the game is started,
@@ -341,11 +339,11 @@ gameStateMatchCredentials creds gameState = case gameState of
         Just ud -> case pwd == UD.password ud of
             False -> Nothing
             True -> Just GameNotStartedView
-    GameStarted map someGame someResolved duration duration' elapsed -> case M.lookup uname map of
+    GameStarted map someGames duration duration' elapsed -> case M.lookup uname map of
         Nothing -> Nothing
         Just ud -> case pwd == UD.password ud of
             False -> Nothing
-            True -> Just (GameStartedView (UD.greatPower ud) someGame someResolved duration duration' elapsed)
+            True -> Just (GameStartedView (UD.greatPower ud) someGames duration duration' elapsed)
   where
     uname = Cred.username creds
     pwd = Cred.password creds
