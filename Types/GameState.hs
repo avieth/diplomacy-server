@@ -156,9 +156,9 @@ gameStateViewResolution turn round view = case view of
     GameStartedView _ games _ _ _ -> case findGame turn round games of
         Nothing -> Nothing
         Just (SomeGame game) -> Just $ case resolve game of
-            TypicalGame _ _ _ zonedResolvedOrders _ -> GameResolutionTypical (M.map mapper zonedResolvedOrders)
-            RetreatGame _ _ _ _ zonedResolvedOrders _ _ -> GameResolutionRetreat (M.map mapper zonedResolvedOrders)
-            AdjustGame _ _ _ zonedResolvedOrders _ -> GameResolutionAdjust (M.map mapper zonedResolvedOrders)
+            TypicalGame _ _ _ zonedResolvedOrders control -> GameResolutionTypical (M.map mapper zonedResolvedOrders) (M.map GreatPower control)
+            RetreatGame _ _ _ _ zonedResolvedOrders occupation control -> GameResolutionRetreat (M.map mapper zonedResolvedOrders) (M.map (fmap Unit) occupation) (M.map GreatPower control)
+            AdjustGame _ _ _ zonedResolvedOrders control -> GameResolutionAdjust (M.map mapper zonedResolvedOrders) (M.map GreatPower control)
   where
     mapper
         :: (Aligned DU.Unit, SomeResolved DOO.OrderObject phase)
@@ -245,19 +245,33 @@ instance JSONSchema GameMetadata
 data GameResolution where
     GameResolutionTypical
         :: M.Map Zone (Aligned Unit, SomeOrderObject Typical, Bool)
+        -> M.Map Province GreatPower
         -> GameResolution
     GameResolutionRetreat
         :: M.Map Zone (Aligned Unit, SomeOrderObject Retreat, Bool)
+        -> M.Map Zone (Aligned Unit)
+        -> M.Map Province GreatPower
         -> GameResolution
     GameResolutionAdjust
         :: M.Map Zone (Aligned Unit, SomeOrderObject Adjust, Bool)
+        -> M.Map Province GreatPower
         -> GameResolution
 
 instance ToJSON GameResolution where
     toJSON gameResolution = case gameResolution of
-        GameResolutionTypical map -> toJSON map
-        GameResolutionRetreat map -> toJSON map
-        GameResolutionAdjust map -> toJSON map
+        GameResolutionTypical zonedResolvedOrders control -> object [
+              "resolved" .= zonedResolvedOrders
+            , "control" .= control
+            ]
+        GameResolutionRetreat zonedResolvedOrders occupation control -> object [
+              "resolved" .= zonedResolvedOrders
+            , "occupation" .= occupation
+            , "control" .= control
+            ]
+        GameResolutionAdjust zonedResolvedOrders control -> object [
+              "resolved" .= zonedResolvedOrders
+            , "control" .= control
+            ]
 
 -- TODO implement this
 instance JSONSchema GameResolution
