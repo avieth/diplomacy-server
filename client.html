@@ -8,10 +8,20 @@
 
     <script>
 
+      var animationFrameCallbacks = [];
+
+      var animate = function () {
+        for (var i = 0; i < animationFrameCallbacks.length; ++i) {
+          animationFrameCallbacks[i]();
+        }
+        window.requestAnimationFrame(animate);
+      };
+
       var clearContainer = function (in_container) {
         while (in_container.firstChild) {
           in_container.removeChild(in_container.firstChild);
         }
+        animationFrameCallbacks = [];
       };
 
       var uiGameId = function (in_container, in_callback) {
@@ -191,7 +201,6 @@
 
       var uiPlayGame = function (in_container, in_gameId, in_username, in_password, in_metadata, in_maybeTurn, in_maybeRound) {
         clearContainer(in_container);
-        console.log(in_metadata);
         if (in_metadata === null) {
           // Game has not yet begun.
           var divLabel = document.createElement('div');
@@ -284,19 +293,33 @@
         tdPhase.style.width = '100%';
 
         var tdCounter = document.createElement('td');
-        var secondsElapsed = ((new Date().getTime() / 1000) - in_metadata.elapsed)
-        var minutesElapsed = Math.round(secondsElapsed / 60);
-        var hoursElapsed = Math.round(minutesElapsed / 60);
-        var duration = {
-          hours : (latestPhase === 'Typical') ? in_metadata.duration.hours : in_metadata.secondDuration.hours,
-          minutes : (latestPhase === 'Typical') ? in_metadata.duration.minutes : in_metadata.secondDuration.minutes
+        var updateCounter = function () {
+          var secondsElapsed = ((new Date().getTime() / 1000) - in_metadata.elapsed)
+          var duration = {
+            hours : (latestPhase === 'Typical') ? in_metadata.duration.hours : in_metadata.secondDuration.hours,
+            minutes : (latestPhase === 'Typical') ? in_metadata.duration.minutes : in_metadata.secondDuration.minutes
+          };
+          var durationSeconds = duration.hours * 60 * 60 + duration.minutes * 60;
+          var secondsRemaining = Math.max(0, durationSeconds - secondsElapsed);
+          var minutesRemaining = secondsRemaining / 60;
+          var hoursRemaining = minutesRemaining / 60;
+          var hoursRemainingText = String(Math.floor(hoursRemaining));
+          var minutesRemainingText = String(Math.floor(minutesRemaining) % 60);
+          var secondsRemainingText = String(Math.floor(secondsRemaining) % 60);
+          if (minutesRemainingText.length === 1) {
+            minutesRemainingText = '0' + minutesRemainingText;
+          }
+          if (secondsRemainingText.length === 1) {
+            secondsRemainingText = '0' + secondsRemainingText;
+          }
+          tdCounter.innerHTML = [
+            hoursRemainingText,
+            minutesRemainingText,
+            secondsRemainingText
+          ].join(':');
         };
-        var hoursRemaining = Math.max(0, duration.hours - hoursElapsed);
-        var minutesRemaining = Math.max(0, duration.minutes - minutesElapsed);
-        if (minutesRemaining < 10) {
-          minutesRemaining = '0' + String(minutesRemaining);
-        }
-        tdCounter.innerHTML = hoursRemaining + ':' + minutesRemaining;
+        updateCounter();
+        animationFrameCallbacks.push(updateCounter);
 
         var tdGreatPowers = document.createElement('td');
         tdGreatPowers.innerHTML = in_metadata.greatPowers.join(', ');
@@ -311,10 +334,19 @@
           nextButton.value = 'Next';
         }
         tdNextButton.addEventListener('click', function (in_event) {
-          // Here we must reload the metadata and the game but stick to a
-          // particular round!
           if (in_turn === in_metadata.turn && in_round === in_metadata.round) {
+            // Here we must reload the metadata and the game but stick to a
+            // particular round!
             uiPlayGame(in_container, in_gameId, in_username, in_password, in_metadata, null, null);
+            fetchMetadata(in_gameId, in_username, in_password, function (in_error, in_metadata) {
+              if (in_error) {
+                uiError(in_container, 'Could not fetch metadata.', function () {
+                  uiInitial(in_container);
+                });
+              } else {
+                uiPlayGame(in_container, in_gameId, in_username, in_password, in_metadata);
+              }
+            });
           } else {
             var nextTurn = in_turn;
             var nextRound = (in_round + 1) % 5;
@@ -1430,6 +1462,7 @@
         document.body.innerWidth = window.innerWidth;
         document.body.innerHeight = window.innerHeight;
         uiInitial(document.body);
+        window.requestAnimationFrame(animate);
       };
 
     </script>
