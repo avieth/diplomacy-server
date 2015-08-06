@@ -80,8 +80,8 @@ waiApp tvar =
 -- imports in this Main file.
 advanceDaemon :: TVar ServerState -> IO ()
 advanceDaemon tvar = do
-    -- We check every half-minute.
-    threadDelay (30 * oneSecond)
+    -- We check every second.
+    threadDelay oneSecond
     advanceGamesIO tvar
     advanceDaemon tvar
   where
