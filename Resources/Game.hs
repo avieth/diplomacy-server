@@ -63,48 +63,23 @@ resource = mkResourceReader
   where
 
     get :: Handler (ReaderT GameId Server)
-    get = secureHandler $ mkHandler (addPar roundParam . mkPar turnParam . jsonO . jsonE . jsonI) handler
+    get = secureHandler $ mkHandler (jsonO . jsonE . jsonI) handler
 
-    turnParam :: Param (Maybe Turn)
-    turnParam = Param ["turn"] $ \xs -> case xs of
-        (Just x : _) -> case reads x :: [(Int, String)] of
-            [(i, [])] -> case turnFromInt i of
-                Just t -> Right (Just t)
-                _ -> Left (ParseError "Could not parse turn")
-            _ -> Left (ParseError "Could not parse turn")
-        [Nothing] -> Right Nothing
-        _ -> Left (ParseError "Could not parse turn")
-
-    roundParam :: Param (Maybe Round)
-    roundParam = Param ["round"] $ \xs -> case xs of
-        (Just x : _) -> case reads x :: [(Int, String)] of
-            [(i, [])] -> let min = minBound :: Round
-                             max = maxBound :: Round
-                         in  if i >= fromEnum min && i <= fromEnum max
-                             then Right (Just (toEnum i))
-                             else Left (ParseError "Could not parse round")
-            _ -> Left (ParseError "Could not parse round")
-        [Nothing] -> Right Nothing
-        _ -> Left (ParseError "Could not parse round")
-
-    handler :: Env h (Maybe Round, Maybe Turn) Credentials -> ExceptT (Reason Void) (ReaderT GameId Server) (Maybe GameData)
+    handler :: Env h p Credentials -> ExceptT (Reason Void) (ReaderT GameId Server) (Maybe GameData)
     handler env =
         let credentials = input env
-            (maybeRound, maybeTurn) = param env
-        in  lift ask >>= \gameId -> doGet credentials gameId maybeTurn maybeRound
+        in  lift ask >>= \gameId -> doGet credentials gameId
 
     doGet
         :: Credentials
         -> GameId
-        -> Maybe Turn
-        -> Maybe Round
         -> ExceptT (Reason Void) (ReaderT GameId Server) (Maybe GameData)
-    doGet credentials gameId maybeTurn maybeRound = withUserCredentialsForGame credentials gameId f
+    doGet credentials gameId = withUserCredentialsForGame credentials gameId f
       where
         f gameStateView = return $ do
             metadata <- gameStateViewMetadata gameStateView
-            let turn = maybe (metadataTurn metadata) id maybeTurn
-            let round = maybe (metadataRound metadata) id maybeRound
+            let turn = metadataTurn metadata
+            let round = metadataRound metadata
             gameStateViewData turn round gameStateView
 
     listing :: ListHandler Server
