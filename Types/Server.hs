@@ -34,6 +34,7 @@ import Control.Concurrent.STM
 import Control.Concurrent.STM.TVar
 import Data.Stream as Stream
 import Data.ByteString as BS
+import Data.ByteString.Lazy as BL
 import qualified Data.Map as M
 import Data.Functor.Identity
 import Data.Hourglass
@@ -49,7 +50,7 @@ data ServerState = ServerState {
     , games :: M.Map GameId (Password, GameState)
     , currentTime :: Elapsed
     , randomDoubles :: Stream.Stream Double
-    , clientHtml :: ByteString
+    , clientHtml :: BL.ByteString
     }
 
 type Server = StateT ServerState Identity
@@ -101,7 +102,7 @@ serverState adminUsername adminPassword = do
     g <- getStdGen
     let ds = unfold random g :: Stream.Stream Double
     t <- timeCurrent
-    bs <- BS.readFile "client.html"
+    bs <- BL.readFile "client.html"
     return $ ServerState (Credentials adminUsername adminPassword) games t ds bs
 
 runDiplomacyServer :: TVar ServerState -> (forall a . Server a -> IO a)
@@ -110,11 +111,12 @@ runDiplomacyServer tvar m = do
     g <- getStdGen
     let ds = unfold random g :: Stream.Stream Double
     t <- timeCurrent
+    bs <- BL.readFile "client.html"
     atomically $ do
         state <- readTVar tvar
         -- It's important to update the time and random doubles before we
         -- run the term @m@.
-        let state' = state { currentTime = t, randomDoubles = ds }
+        let state' = state { currentTime = t, randomDoubles = ds, clientHtml = bs }
         let (x, nextState) = runIdentity (runStateT m state')
         writeTVar tvar nextState
         return x

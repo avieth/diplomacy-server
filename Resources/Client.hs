@@ -53,4 +53,4 @@ resource = (mkResource enter)
     doGet :: ExceptT (Reason Void) Server (BL.ByteString, String, Bool)
     doGet = do
         state <- lift S.get
-        return $ (BL.fromStrict (clientHtml state), "client.html", False)
+        return $ (clientHtml state, "client.html", False)
