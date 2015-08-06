@@ -441,7 +441,7 @@
           // It's OK if there's no element; control is for all provinces, but
           // we only SHOW control for supply centres.
           var element = svgMap.getElementById('SC' + i);
-          if (element) {
+          if (element && element.children && element.children[0]) {
             element.children[0].setAttribute('class', control[i]);
           }
         }
@@ -460,7 +460,6 @@
           }
           var orderForm = document.createElement('form');
           orderForm.id = 'orderForm';
-          orderForm.appendChild(orderTable);
           // Identifying when we can give an order... for lack of any proper
           // design in this client, we just check that the third component of
           // an entry is not null, in which case its the current order, and we
@@ -640,8 +639,15 @@
           var submitButton = document.createElement('input');
           submitButton.type = 'submit';
           submitButton.value = 'Issue orders'
+          orderForm.appendChild(orderTable);
           orderForm.appendChild(submitButton);
-          tdOrders.appendChild(orderForm);
+          if (orderEntries.length > 0) {
+            tdOrders.appendChild(orderForm);
+          } else {
+            var span = document.createElement('span');
+            span.innerHTML = 'There\'s nothing to do.';
+            tdOrders.appendChild(span);
+          }
         } else {
           // A cheap visualization of the resolved orders.
           var ordersByGreatPower = {};
@@ -686,7 +692,14 @@
             div.appendChild(orderTable);
             orderList.appendChild(div);
           }
-          tdOrders.appendChild(orderList);
+          var somethingHappened = index > 0;
+          if (somethingHappened) {
+            tdOrders.appendChild(orderList);
+          } else {
+            var span = document.createElement('span');
+            span.innerHTML = 'Nothing happened.';
+            tdOrders.appendChild(span);
+          }
         }
 
         return table;
@@ -743,7 +756,12 @@
         xhr.open(in_method, in_route);
         xhr.addEventListener('load', function (in_event) {
           if (xhr.status === 200) {
-            in_callback(false, JSON.parse(xhr.response));
+            var response = xhr.response;
+            if (xhr.response === undefined) {
+              // Some browser don't define response...
+              response = xhr.responseText;
+            }
+            in_callback(false, JSON.parse(response));
           } else {
             in_callback(true);
           }
@@ -1094,6 +1112,9 @@
           if (in_data.orderObject) {
             orderObjectInput.value = in_data.orderObject;
           }
+          orderObjectInput.addEventListener('click', function () {
+            this.select();
+          });
           ret.left = orderSubjectLabel;
           ret.right = orderObjectInput;
           ret.getOrder = function () {
@@ -1683,7 +1704,7 @@
     <g id="Mid-Atlantic Ocean" title="Mid-Atlantic Ocean">
       <polygon class="w" points="102,317 100,322 103,328 109,329 123,344 122,350 123,357 128,363 121,382 122,384 112,399 101,396 96,397 72,384 59,381 54,375 48,374 46,378 39,375 33,381 35,384 32,396
         30,406 17,427 14,427 10,433 13,440 15,441 12,450 13,454 8,462 19,469 27,468 33,475 34,484 37,490 37,495 33,496 17,518 0,520 0,273 58,273"/>
-      <text x="50" y="355">Mao</text>
+      <text x="50" y="355">Mid</text>
     </g>
     <g id="Moscow" title="Moscow">
       <polygon class="l" points="609,117 598,132 573,143 564,159 534,164 515,169 489,184 476,183 458,194 456,207 457,210 451,213 447,209 439,211 428,225 421,229 409,228 405,239 404,275 392,278
