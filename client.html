@@ -1,5 +1,7 @@
-<html>
+<!DOCTYPE html PUBLIC "-//W3C//DTD XHTML 1.0 Transitional//EN" "http://www.w3.org/TR/xhtml1/DTD/xhtml1-transitional.dtd">
+<html xmlns="http://www.w3.org/1999/xhtml">
   <head>
+    <meta http-equiv="Content-Type" content="text/html; charset=UTF-8" />
   </head>
 
   <body>
@@ -148,7 +150,13 @@
               uiGameId(in_container, function (in_gameId) {
                 uiUsername(in_container, function (in_username) {
                   uiPassword(in_container, function (in_password) {
-                    uiPlayGame(in_container, in_gameId, in_username, in_password);
+                    fetchMetadata(in_gameId, in_username, in_password, function (in_error, in_metadata) {
+                      if (in_error) {
+                        uiPlay(in_container);
+                      } else {
+                        uiPlayGame(in_container, in_gameId, in_username, in_password, in_metadata);
+                      }
+                    });
                   });
                 });
               });
@@ -163,9 +171,11 @@
                     uiPassword(in_container, function (in_password) {
                       joinGame(in_container, in_gameId, in_gamePassword, in_username, in_password, function (in_error) {
                         if (in_error) {
-                          uiPlay(in_container);
+                          uiError(in_container, 'Could not join game.', function () {
+                            uiInitial(in_container);
+                          });
                         } else {
-                          uiPlayGame(in_container, in_gameId, in_username, in_password);
+                          uiInitial(in_container);
                         }
                       });
                     });
@@ -179,27 +189,11 @@
         in_container.appendChild(element);
       };
 
-      var uiPlayGame = function (in_container, in_gameId, in_username, in_password) {
+      var uiPlayGame = function (in_container, in_gameId, in_username, in_password, in_metadata, in_maybeTurn, in_maybeRound) {
         clearContainer(in_container);
-        fetchGame(in_container, in_gameId, in_username, in_password, function (in_error, in_gameView) {
-          if (in_error) {
-            uiInitial(in_container);
-          } else {
-            uiGameView(in_container, in_gameId, in_username, in_password, in_gameView);
-          }
-        });
-      };
-
-      var uiGameView = function (in_container, in_gameId, in_username, in_password, in_gameView) {
-        clearContainer(in_container);
-        var ul = document.createElement('ul');
-        ul.style.display = 'table';
-        ul.style.tableLayout = 'fixed';
-        ul.style.width = '100%';
-        ul.style.height = '100%';
-        ul.style.padding = 0;
-        ul.style.margin = 0;
-        if (in_gameView.tag === 'GameNotStarted') {
+        console.log(in_metadata);
+        if (in_metadata === null) {
+          // Game has not yet begun.
           var divLabel = document.createElement('div');
           divLabel.innerHTML = 'Game not started';
           var liLabel = document.createElement('li');
@@ -207,136 +201,405 @@
           liLabel.style.display = 'table-row';
           liLabel.style.textAlign = 'center';
           ul.appendChild(liLabel);
-        } else if (in_gameView.tag === 'GameStarted') {
-          var metadata = in_gameView.components.metadata;
-          var greatPowers = in_gameView.components.greatPowers;
-          var occupation = in_gameView.components.occupation;
-          var dislodgement = in_gameView.components.dislodgement || {};
-          var control = in_gameView.components.control;
-          var resolutions = in_gameView.components.resolved;
-          console.log(metadata);
-          console.log(greatPowers);
-          console.log(occupation);
-          console.log(dislodgement);
-          console.log(control);
-          console.log(resolutions);
-          var divYear = document.createElement('div');
-          divYear.innerHTML = String(1900 + Number(metadata.turn));
-          var liYear = document.createElement('li');
-          liYear.appendChild(divYear);
-          liYear.style.display = 'table-row';
-          liYear.style.textAlign = 'center';
-          ul.appendChild(liYear);
-          var season;
-          var phase;
-          if (metadata.round === 4) {
-            season = 'Winter';
-            phase = 'Adjust';
-          } else if (metadata.round === 3) {
-            season = 'Fall';
-            phase = 'Retreat';
-          } else if (metadata.round === 2) {
-            season = 'Fall';
-            phase = 'Typical';
-          } else if (metadata.round === 1) {
-            season = 'Spring';
-            phase = 'Retreat';
-          } else if (metadata.round === 0) {
-            season = 'Spring';
-            phase = 'Typical';
+        } else {
+          // Show the game at the latest round.
+          var turn = in_maybeTurn;
+          if (typeof turn !== 'number') {
+            turn = in_metadata.turn;
           }
-          var divSeason = document.createElement('div');
-          divSeason.innerHTML = season;
-          var liSeason = document.createElement('li');
-          liSeason.appendChild(divSeason);
-          liSeason.style.display = 'table-row';
-          liSeason.style.textAlign = 'center';
-          ul.appendChild(liSeason);
-          var divPhase = document.createElement('div');
-          divPhase.innerHTML = phase;
-          var liPhase = document.createElement('li');
-          liPhase.appendChild(divPhase);
-          liPhase.style.display = 'table-row';
-          liPhase.style.textAlign = 'center';
-          ul.appendChild(liPhase);
-          var secondsElapsed = ((new Date().getTime() / 1000) - metadata.elapsed)
-          var minutesElapsed = Math.round(secondsElapsed / 60);
-          var hoursElapsed = Math.round(minutesElapsed / 60);
-          var duration = {
-            hours : (phase === 'Typical') ? metadata.durationHours : metadata.secondDurationHours,
-            minutes : (phase === 'Typical') ? metadata.durationMinutes : metadata.secondDurationMinutes
+          var round = in_maybeRound;
+          if (typeof round !== 'number') {
+            round = in_metadata.round;
+          }
+          var f = function (in_callback) {
+            fetchResolution(in_gameId, in_username, in_password, turn, round, in_callback);
           };
-          var hoursRemaining = Math.max(0, duration.hours - hoursElapsed);
-          var minutesRemaining = Math.max(0, duration.minutes - minutesElapsed);
-          if (minutesRemaining < 10) {
-            minutesRemaining = '0' + String(minutesRemaining);
+          if (turn === in_metadata.turn && round === in_metadata.round) {
+            var f = function (in_callback) {
+              fetchGame(in_gameId, in_username, in_password, in_callback);
+            };
           }
-          var divTimeRemaining = document.createElement('div');
-          divTimeRemaining.innerHTML = hoursRemaining + ':' + minutesRemaining + ' remaining';
-          var liTimeRemaining = document.createElement('li');
-          liTimeRemaining.appendChild(divTimeRemaining);
-          liTimeRemaining.style.display = 'table-row';
-          liTimeRemaining.style.textAlign = 'center';
-          ul.appendChild(liTimeRemaining);
-          var divGreatPowers = document.createElement('div');
-          divGreatPowers.innerHTML = greatPowers.join(', ');
-          var liGreatPowers = document.createElement('li');
-          liGreatPowers.appendChild(divGreatPowers);
-          liGreatPowers.style.display = 'table-row';
-          liGreatPowers.style.textAlign = 'center';
-          ul.appendChild(liGreatPowers);
+          f(function (in_error, in_game) {
+            if (in_error) {
+              uiError(in_container, 'Could not fetch game.', function () {
+                uiPlay(in_container);
+              });
+            } else {
+              uiGameView(in_container, in_gameId, in_username, in_password, in_metadata, turn, round, in_game);
+            }
+          });
+        }
+      };
 
+      var uiMetadata = function (in_container, in_gameId, in_username, in_password, in_metadata, in_turn, in_round) {
+
+        var turn = in_turn + 1900;
+        var phase = 'Typical';
+        var season = 'Spring';
+        if (in_round === 1 || in_round === 3) {
+          phase = 'Retreat';
+        } else if (in_round === 4) {
+          phase = 'Adjust';
+        }
+        if (in_round > 1 && in_round < 4) {
+          season = 'Fall';
+        } else if (in_round === 4) {
+          season = 'Winter';
+        }
+        var latestPhase = 'Typical';
+        if (in_metadata.round === 1 || in_metadata.round === 3) {
+          latestPhase = 'Retreat';
+        } else if (in_metadata.round === 4) {
+          latestPhase = 'Adjust';
+        }
+
+        var tdPreviousButton = document.createElement('td');
+        var previousButton = document.createElement('input');
+        previousButton.type = 'button';
+        previousButton.value = 'Previous';
+        tdPreviousButton.appendChild(previousButton);
+        if (in_turn === 0 && in_round === 0) {
+          previousButton.disabled = true;
+        }
+        tdPreviousButton.addEventListener('click', function (in_event) {
+          // Here we must reload the metadata and the game but stick to a
+          // particular round!
+          if (in_turn === 0 && in_round === 0) {
+          } else {
+            var previousTurn = in_turn;
+            // JavaScript modular arithmetic at negative numbers isn't
+            // defined such that we can use (in_round - 1) % 5.
+            var previousRound = in_round - 1;
+            if (previousRound === -1) {
+              previousRound = 4;
+              previousTurn = previousTurn - 1;
+            }
+            uiPlayGame(in_container, in_gameId, in_username, in_password, in_metadata, previousTurn, previousRound);
+          }
+        });
+
+
+        var tdPhase = document.createElement('td');
+        tdPhase.innerHTML = season + ' ' + String(turn) + ' ' + phase;
+        tdPhase.style.width = '100%';
+
+        var tdCounter = document.createElement('td');
+        var secondsElapsed = ((new Date().getTime() / 1000) - in_metadata.elapsed)
+        var minutesElapsed = Math.round(secondsElapsed / 60);
+        var hoursElapsed = Math.round(minutesElapsed / 60);
+        var duration = {
+          hours : (latestPhase === 'Typical') ? in_metadata.duration.hours : in_metadata.secondDuration.hours,
+          minutes : (latestPhase === 'Typical') ? in_metadata.duration.minutes : in_metadata.secondDuration.minutes
+        };
+        var hoursRemaining = Math.max(0, duration.hours - hoursElapsed);
+        var minutesRemaining = Math.max(0, duration.minutes - minutesElapsed);
+        if (minutesRemaining < 10) {
+          minutesRemaining = '0' + String(minutesRemaining);
+        }
+        tdCounter.innerHTML = hoursRemaining + ':' + minutesRemaining;
+
+        var tdGreatPowers = document.createElement('td');
+        tdGreatPowers.innerHTML = in_metadata.greatPowers.join(', ');
+
+        var tdNextButton = document.createElement('td');
+        var nextButton = document.createElement('input');
+        nextButton.type = 'button';
+        tdNextButton.appendChild(nextButton);
+        if (in_turn === in_metadata.turn && in_round === in_metadata.round) {
+          nextButton.value = 'Refresh';
+        } else {
+          nextButton.value = 'Next';
+        }
+        tdNextButton.addEventListener('click', function (in_event) {
+          // Here we must reload the metadata and the game but stick to a
+          // particular round!
+          if (in_turn === in_metadata.turn && in_round === in_metadata.round) {
+            uiPlayGame(in_container, in_gameId, in_username, in_password, in_metadata, null, null);
+          } else {
+            var nextTurn = in_turn;
+            var nextRound = (in_round + 1) % 5;
+            if (nextRound === 0) {
+              nextTurn = nextTurn + 1;
+            }
+            uiPlayGame(in_container, in_gameId, in_username, in_password, in_metadata, nextTurn, nextRound);
+          }
+        });
+
+        var table = document.createElement('table');
+        var tr = document.createElement('tr');
+        tr.appendChild(tdPreviousButton);
+        tr.appendChild(tdPhase);
+        tr.appendChild(tdCounter);
+        tr.appendChild(tdGreatPowers);
+        tr.appendChild(tdNextButton);
+        tr.style.whiteSpace = 'nowrap';
+        table.appendChild(tr);
+        return table;
+      };
+
+      var uiGameData = function (in_container, in_gameId, in_username, in_password, in_metadata, in_round, in_game) {
+        // in_game could be the current game in any phase, or a resolution
+        // from any phase.
+        // No matter the case, we have enough data to show the map.
+
+        var table = document.createElement('table');
+        var tr = document.createElement('tr');
+        var tdMap = document.createElement('td');
+        var tdOrders = document.createElement('td');
+        tdMap.style.width = '50%';
+        tdOrders.style.width = '50%';
+        tdOrders.style.verticalAlign = 'text-top';
+        tr.appendChild(tdMap);
+        tr.appendChild(tdOrders);
+        table.appendChild(tr);
+
+        var occupation;
+        var dislodgement;
+        var control = in_game.control;
+
+        if (in_game.resolved) {
+          if (in_game.occupation) {
+            // It's a retreat phase resolution.
+            occupation = in_game.occupation;
+          } else {
+            occupation = in_game.resolved;
+          }
+        } else {
+          occupation = in_game.occupation;
+          dislodgement = in_game.dislodgement || {};
+        }
+
+        var svgMap = window.svgMap
+        for (var i in svgMap.fleets) {
+          svgMap.removeChild(svgMap.fleets[i]);
+        }
+        for (var i in svgMap.armies) {
+          svgMap.removeChild(svgMap.armies[i]);
+        }
+        svgMap.fleets = [];
+        svgMap.armies = [];
+        for (var i in occupation) {
+          // Here we construct SVG elements for each unit on the board, and
+          // throw them into the map.
+          if (occupation[i][2] === 'Build') {
+          } else if (occupation[i][1] === 'F') {
+            svgMap.fleets.push(svgFleet(occupation[i][0], unitOccupationLocation(i)));
+          } else {
+            svgMap.armies.push(svgArmy(occupation[i][0], unitOccupationLocation(i)));
+          }
+        }
+        for (var i in dislodgement) {
+          // Just like occupation, except the units are offset slightly and
+          // drawn atop the occupier.
+          if (dislodgement[i][1] === 'F') {
+            svgMap.fleets.push(svgFleet(dislodgement[i][0], unitDislodgementLocation(i)));
+          } else {
+            svgMap.armies.push(svgArmy(dislodgement[i][0], unitDislodgementLocation(i)));
+          }
+        }
+        for (var i in svgMap.fleets) {
+          svgMap.appendChild(svgMap.fleets[i]);
+        }
+        for (var i in svgMap.armies) {
+          svgMap.appendChild(svgMap.armies[i]);
+        }
+        for (var i in control) {
+          // For control, we can just set all supply centre classes to their
+          // controlling nation, since control never reverts to Unowned.
+          // It's OK if there's no element; control is for all provinces, but
+          // we only SHOW control for supply centres.
+          var element = svgMap.getElementById('SC' + i);
+          if (element) {
+            element.children[0].setAttribute('class', control[i]);
+          }
+        }
+        svgMap.style.display = 'inline-block';
+        tdMap.appendChild(svgMap);
+
+        if (!in_game.resolved) {
           // Inputs for orders.
+          var orderTable = document.createElement('table');
+          var greatPowers = in_metadata.greatPowers;
+          var phase = 'Typical';
+          if (in_round === 1 || in_round === 3) {
+            phase = 'Retreat';
+          } else if (in_round === 4) {
+            phase = 'Adjust';
+          }
           var orderForm = document.createElement('form');
           orderForm.id = 'orderForm';
-          var ulOrderForm = document.createElement('ul');
-          ulOrderForm.style.display = 'table';
-          ulOrderForm.style.width = '100%';
-          ulOrderForm.style.tableLayout = 'fixed';
-          ulOrderForm.style.padding = 0;
-          ulOrderForm.style.margin = 0;
-          orderForm.appendChild(ulOrderForm);
+          orderForm.appendChild(orderTable);
           // Identifying when we can give an order... for lack of any proper
           // design in this client, we just check that the third component of
           // an entry is not null, in which case its the current order, and we
           // assume that this unit is under the user's control.
           var orderEntries = [];
-          if (phase === 'Typical' || phase === 'Adjust') {
-            // TODO for adjust phase we must be clever about giving the order
-            // input: gives boxes for home supply centres, and a box for
-            // every unit the user owns.
+          if (phase === 'Typical') {
             for (var i in occupation) {
               if (occupation[i][2]) {
-                var orderEntry = makeOrderEntry(i, occupation[i]);
+                // Above test passes only if this client has control over the
+                // great power who owns this entry.
+                var orderEntry = makeOrderEntry({
+                  provinceTarget : i,
+                  greatPower : occupation[i][0],
+                  unit : occupation[i][1],
+                  orderObject : occupation[i][2]
+                });
                 orderEntries.push(orderEntry);
-                var li = document.createElement('li');
-                li.style.display = 'table-row';
-                li.style.textAlign = 'center';
-                li.appendChild(orderEntry);
-                ulOrderForm.appendChild(li);
+                var tr = document.createElement('tr');
+                var tdl = document.createElement('td');
+                tdl.appendChild(orderEntry.left);
+                var tdr = document.createElement('td');
+                tdr.appendChild(orderEntry.right);
+                tr.appendChild(tdl);
+                tr.appendChild(tdr);
+                orderTable.appendChild(tr);
               }
             }
-          } else {
+          } else if (phase === 'Retreat') {
             for (var i in dislodgement) {
               if (dislodgement[i][2]) {
-                var orderEntry = makeOrderEntry(i, dislodgement[i]);
+                var orderEntry = makeOrderEntry({
+                  provinceTarget : i,
+                  greatPower : dislodgement[i][0],
+                  unit : dislodgement[i][1],
+                  orderObject : dislodgement[i][2]
+                });
                 orderEntries.push(orderEntry);
-                orderEntries.push(orderEntry);
-                var li = document.createElement('li');
-                li.style.display = 'table-row';
-                li.style.textAlign = 'center';
-                li.appendChild(orderEntry);
-                ulOrderForm.appendChild(li);
+                var tr = document.createElement('tr');
+                var tdl = document.createElement('td');
+                tdl.appendChild(orderEntry.left);
+                var tdr = document.createElement('td');
+                tdr.appendChild(orderEntry.right);
+                tr.appendChild(tdl);
+                tr.appendChild(tdr);
+                orderTable.appendChild(tr);
+              }
+            }
+          } else if (phase === 'Adjust') {
+            for (var k in greatPowers) {
+              var controlledSupplyCentres = [];
+              for (var i in control) {
+                if (supplyCentres[i] === true && greatPowers[k] === control[i]) {
+                  controlledSupplyCentres.push(i);
+                }
+              }
+              var controlledUnits = [];
+              for (var i in occupation) {
+                if (greatPowers[k] === occupation[i][0]
+                  && occupation[i][2] !== 'Build') {
+                  controlledUnits.push([i, occupation[i][1]]);
+                }
+              }
+              var deficit = controlledUnits.length - controlledSupplyCentres.length;
+              if (deficit === 0) {
+                // Everybody must continue; no need to show any controls.
+              } else if (deficit > 0) {
+                // Show disband options for all units; server should not accept
+                // more disbands than the difference.
+                // This is done via checkboxes for each unit.
+                for (var i in occupation) {
+                  if (greatPowers[k] === occupation[i][0]) {
+                    var orderEntry = makeOrderEntry({
+                      phase : 'Adjust',
+                      provinceTarget : i,
+                      greatPower : occupation[i][0],
+                      unit : occupation[i][1],
+                      deficit : deficit,
+                      orderObject : occupation[i][2]
+                    });
+                    orderEntries.push(orderEntry);
+                    var tr = document.createElement('tr');
+                    var tdl = document.createElement('td');
+                    tdl.appendChild(orderEntry.left);
+                    var tdr = document.createElement('td');
+                    tdr.appendChild(orderEntry.right);
+                    tr.appendChild(tdl);
+                    tr.appendChild(tdr);
+                    orderTable.appendChild(tr);
+                  }
+                }
+              } else {
+                // Show build options for all home supply centres.
+                // This is done via dropdowns for each unoccupied
+                // home supply centre.
+                // We take special care for St. Petersburg, in which we must
+                // show options for itself and for both coasts.
+                for (var i in supplyCentres) {
+                  if ( ownership[i] === greatPowers[k]
+                    && control[i] === greatPowers[k]
+                    && (!occupation[i] || occupation[i][2] === 'Build')) {
+                    var orderEntry
+                    if (i === 'St. Petersburg') {
+                      if ( (occupation['St. Petersburg NC'] && occupation['St. Petersburg NC'][2] !== 'Build')
+                        || (occupation['St. Petersburg SC'] && occupation['St. Petersburg SC'][2] !== 'Build')) {
+                        continue;
+                      } else {
+                        // Special controls for the multi-coast home supply
+                        // centre: a 4-option dropdown
+                        //   -
+                        //   A
+                        //   F (NC)
+                        //   F (SC)
+                        var buildSubjectValue = '-';
+                        if (occupation['St. Petersburg NC'] && occupation['St. Petersburg NC'][2] === 'Build') {
+                          buildSubjectValue = 'F (NC)';
+                        } else if (occupation['St. Petersburg SC'] && occupation['St. Petersburg SC'][2] === 'Build') {
+                          buildSubjectValue = 'F (SC)';
+                        } else if (occupation['St. Petersburg'] && occupation['St. Petersburg'][2] === 'Build') {
+                          buildSubjectValue = 'A';
+                        }
+                        orderEntry = makeOrderEntry({
+                          phase : 'Adjust',
+                          provinceTarget : i,
+                          greatPower : greatPowers[k],
+                          buildSubjectValue : buildSubjectValue
+                        });
+                      }
+                    } else {
+                      var buildSubjectValue = '-';
+                      if (occupation[i] && occupation[i][2] === 'Build') {
+                        buildSubjectValue = occupation[i][1];
+                      }
+                      orderEntry = makeOrderEntry({
+                        phase : 'Adjust',
+                        provinceTarget : i,
+                        greatPower : greatPowers[k],
+                        buildSubjectValue : buildSubjectValue
+                      });
+                    }
+                    orderEntries.push(orderEntry);
+                    var tr = document.createElement('tr');
+                    var tdl = document.createElement('td');
+                    tdl.appendChild(orderEntry.left);
+                    var tdr = document.createElement('td');
+                    tdr.appendChild(orderEntry.right);
+                    tr.appendChild(tdl);
+                    tr.appendChild(tdr);
+                    orderTable.appendChild(tr);
+                  }
+                }
               }
             }
           }
           orderForm.addEventListener('submit', function (in_event) {
             var orders = [];
+            var order;
             for (var i in orderEntries) {
-              orders.push([orderEntries[i].greatPower, orderEntries[i].orderSubject + ' ' + orderEntries[i].orderObjectInput.value]);
+              order = orderEntries[i].getOrder();
+              if (order === null) {
+              } else {
+                orders.push([order.greatPower, order.unit + ' ' + order.provinceTarget + ' ' + order.orderObject]);
+              }
             }
             submitOrders(in_container, in_gameId, in_username, in_password, phase, orders, function () {
-              uiPlayGame(in_container, in_gameId, in_username, in_password);
+              fetchMetadata(in_gameId, in_username, in_password, function (in_error, in_metadata) {
+                if (in_error) {
+                  uiPlay(in_container);
+                } else {
+                  uiPlayGame(in_container, in_gameId, in_username, in_password, in_metadata);
+                }
+              });
             });
             in_event.preventDefault();
             in_event.stopPropagation();
@@ -346,68 +609,66 @@
           submitButton.type = 'submit';
           submitButton.value = 'Issue orders'
           orderForm.appendChild(submitButton);
-          ul.appendChild(orderForm);
-
-          var svgMap = window.svgMap
-          for (var i in svgMap.fleets) {
-            svgMap.removeChild(svgMap.fleets[i]);
-          }
-          for (var i in svgMap.armies) {
-            svgMap.removeChild(svgMap.armies[i]);
-          }
-          svgMap.fleets = [];
-          svgMap.armies = [];
-          for (var i in occupation) {
-            // Here we construct SVG elements for each unit on the board, and
-            // throw them into the map.
-            if (occupation[i][1] === 'F') {
-              svgMap.fleets.push(svgFleet(occupation[i][0], unitOccupationLocation(i)));
-            } else {
-              svgMap.armies.push(svgArmy(occupation[i][0], unitOccupationLocation(i)));
-            }
-          }
-          for (var i in dislodgement) {
-            // Just like occupation, except the units are offset slightly and
-            // drawn atop the occupier.
-            if (dislodgement[i][1] === 'F') {
-              svgMap.fleets.push(svgFleet(dislodgement[i][0], unitDislodgementLocation(i)));
-            } else {
-              svgMap.armies.push(svgArmy(dislodgement[i][0], unitDislodgementLocation(i)));
-            }
-          }
-          for (var i in svgMap.fleets) {
-            svgMap.appendChild(svgMap.fleets[i]);
-          }
-          for (var i in svgMap.armies) {
-            svgMap.appendChild(svgMap.armies[i]);
-          }
-          for (var i in control) {
-            // For control, we can just set all supply centre classes to their
-            // controlling nation, since control never reverts to Unowned.
-            // It's OK if there's no element; control is for all provinces, but
-            // we only SHOW control for supply centres.
-            var element = svgMap.getElementById('SC' + i);
-            if (element) {
-              element.children[0].setAttribute('class', control[i]);
-            }
-          }
-
-          svgMap.style.display = 'block';
-          ul.appendChild(svgMap);
+          tdOrders.appendChild(orderForm);
         } else {
-          var divLabel = document.createElement('div');
-          divLabel.innerHTML = 'Unknown game state is unknown';
-          var liLabel = document.createElement('li');
-          liLabel.appendChild(divLabel);
-          ul.appendChild(liLabel);
+          // A cheap visualization of the resolved orders.
+          var ordersByGreatPower = {};
+          for (var i in in_game.resolved) {
+            ordersByGreatPower[in_game.resolved[i][0]] = ordersByGreatPower[in_game.resolved[i][0]] || [];
+            var orderText = in_game.resolved[i][1] + ' ' + i + ' ' + in_game.resolved[i][2];
+            ordersByGreatPower[in_game.resolved[i][0]].push({
+              order : orderText,
+              succeeded : in_game.resolved[i][3]
+            });
+          }
+          var orderList = document.createElement('div');
+          var index = 0;
+          for (var i in ordersByGreatPower) {
+            var div = document.createElement('div');
+            if (index++ % 2 === 0) {
+              div.style.backgroundColor = 'rgba(0,0,0,0)';
+            } else {
+              div.style.backgroundColor = 'rgba(0,0,0,0.0.05)';
+            }
+            var span = document.createElement('span');
+            span.innerHTML = i;
+            span.style.fontStyle = 'italic';
+            div.appendChild(span);
+            var orderTable = document.createElement('table');
+            for (var j in ordersByGreatPower[i]) {
+              var tr = document.createElement('tr');
+              var tdl = document.createElement('td');
+              var tdr = document.createElement('td');
+              tdr.innerHTML = ordersByGreatPower[i][j].order;
+              if (ordersByGreatPower[i][j].succeeded) {
+                tdl.innerHTML = '✓';
+                tr.style.color = 'green';
+              } else {
+                tdl.innerHTML = '✗';
+                tr.style.color = 'red';
+              }
+              tr.appendChild(tdl);
+              tr.appendChild(tdr);
+              orderTable.appendChild(tr);
+            }
+            div.appendChild(orderTable);
+            orderList.appendChild(div);
+          }
+          tdOrders.appendChild(orderList);
         }
-        var divRefresh = button('Refresh', function () {
-          uiPlayGame(in_container, in_gameId, in_username, in_password);
-        });
-        var liRefresh = document.createElement('li');
-        liRefresh.appendChild(divRefresh);
-        ul.appendChild(liRefresh);
-        in_container.appendChild(ul);
+
+        return table;
+      };
+
+      var uiGameView = function (in_container, in_gameId, in_username, in_password, in_metadata, in_turn, in_round, in_game) {
+        clearContainer(in_container);
+        var metadataContainer = uiMetadata(in_container, in_gameId, in_username, in_password, in_metadata, in_turn, in_round);
+        var gameDataContainer = uiGameData(in_container, in_gameId, in_username, in_password, in_metadata, in_round, in_game);
+        metadataContainer.style.width = '100%';
+        gameDataContainer.style.height = '100%';
+        gameDataContainer.style.width = '100%';
+        in_container.appendChild(metadataContainer);
+        in_container.appendChild(gameDataContainer);
       };
 
       var joinGame = function (in_container, in_gameId, in_gamePassword, in_username, in_password, in_callback) {
@@ -445,46 +706,51 @@
         xhr.send(JSON.stringify(data));
       };
 
-      var fetchGame = function (in_container, in_gameId, in_username, in_password, in_callback) {
+      var fetch = function (in_method, in_route, in_data, in_callback) {
         var xhr = new XMLHttpRequest();
-        xhr.open('PUT', window.location + '/game/' + in_gameId);
+        xhr.open(in_method, in_route);
         xhr.addEventListener('load', function (in_event) {
           if (xhr.status === 200) {
             in_callback(false, JSON.parse(xhr.response));
-          } else if (xhr.status === 404) {
-            uiError(in_container, 'Game not found', function () {
-              in_callback(true);
-            });
-          } else if (xhr.status === 403) {
-            uiError(in_container, 'Unauthorized', function () {
-              in_callback(true);
-            });
-          } else if (xhr.status === 401) {
-            uiError(in_container, 'Unauthorized', function () {
-              in_callback(true);
-            });
           } else {
-            uiError(in_container, 'Unexpected error is unexpected', function () {
-              in_callback(true);
-            });
+            in_callback(true);
           }
         });
         xhr.addEventListener('error', function (in_event) {
-          uiError(in_container, 'Unexpected error is unexpected', function () {
-            in_callback(true);
-          });
+          in_callback(ture);
         });
         xhr.addEventListener('abort', function (in_event) {
-          uiError(in_container, 'Unexpected error is unexpected', function () {
-            in_callback(true);
-          });
+          in_callback(ture);
         });
         xhr.setRequestHeader('Content-Type', 'application/json');
-        var credentials = {
+        xhr.send(JSON.stringify(in_data));
+      };
+
+      var fetchMetadata = function (in_gameId, in_username, in_password, in_callback) {
+        var route = window.location + '/game/' + in_gameId + '/metadata';
+        var data = {
           username : in_username,
           password : in_password
         };
-        xhr.send(JSON.stringify(credentials));
+        fetch('PUT', route, data, in_callback);
+      };
+
+      var fetchResolution = function (in_gameId, in_username, in_password, in_turn, in_round, in_callback) {
+        var route = window.location + '/game/' + in_gameId + '/resolution?turn=' + in_turn + '&round=' + in_round;
+        var data = {
+          username : in_username,
+          password : in_password
+        };
+        fetch('PUT', route, data, in_callback);
+      };
+
+      var fetchGame = function (in_gameId, in_username, in_password, in_callback) {
+        var route = window.location + '/game/' + in_gameId;
+        var data = {
+          username : in_username,
+          password : in_password
+        };
+        fetch('PUT', route, data, in_callback);
       };
 
       var createGame = function (in_container, in_gameId, in_gamePassword, in_gameDuration, in_gameSecondDuration, in_username, in_password, in_callback) {
@@ -704,20 +970,110 @@
         xhr.send(JSON.stringify(data));
       };
 
-      var makeOrderEntry = function (in_provinceTarget, in_entry) {
-        var span = document.createElement('span');
-        span.greatPower = in_entry[0];
-        span.orderSubject = in_entry[1] + ' ' + in_provinceTarget;
-        span.orderSubjectLabel = document.createElement('span');
-        span.orderSubjectLabel.innerHTML = span.orderSubject;
-        span.appendChild(span.orderSubjectLabel);
-        span.orderObjectInput = document.createElement('input');
-        span.orderObjectInput.setAttribute('form', 'orderForm');
-        if (in_entry[2]) {
-          span.orderObjectInput.value = in_entry[2];
+      var makeOrderEntry = function (in_data) {
+        var ret = {
+          left : undefined,
+          right : undefined,
+          getOrder : undefined
+        };
+        if (in_data.phase === 'Adjust') {
+          if (in_data.deficit === 0) {
+          } else if (in_data.deficit > 0) {
+            var orderSubjectLabel = document.createElement('span');
+            orderSubjectLabel.innerHTML = in_data.unit + ' ' + in_data.provinceTarget;
+            var orderObjectInput = document.createElement('input');
+            orderObjectInput.type = 'checkbox';
+            if (in_data.orderObject === 'Disband') {
+              orderObjectInput.checked = true;
+            } else {
+              orderObjectInput.checked = false;
+            }
+            ret.left = orderSubjectLabel;
+            ret.right = orderObjectInput;
+            ret.getOrder = function () {
+              return {
+                greatPower : in_data.greatPower,
+                unit : in_data.unit,
+                provinceTarget : in_data.provinceTarget,
+                orderObject : (orderObjectInput.checked) ? 'Disband' : 'Continue'
+              };
+            };
+          } else {
+            var orderObjectLabel = document.createElement('span');
+            orderObjectLabel.innerHTML = in_data.provinceTarget + ' Build';
+            var orderSubjectInput = document.createElement('select');
+            var selectionNone = document.createElement('option');
+            selectionNone.innerHTML = '-';
+            selectionNone.value = '-';
+            orderSubjectInput.appendChild(selectionNone);
+            var selectionArmy = document.createElement('option');
+            selectionArmy.innerHTML = 'A';
+            selectionArmy.value = 'A';
+            orderSubjectInput.appendChild(selectionArmy);
+            if (in_data.provinceTarget === 'St. Petersburg') {
+              var selectionFleetNC = document.createElement('option');
+              selectionFleetNC.innerHTML = 'F (NC)';
+              selectionFleetNC.value = 'F (NC)';
+              orderSubjectInput.appendChild(selectionFleetNC);
+              var selectionFleetSC = document.createElement('option');
+              selectionFleetSC.innerHTML = 'F (SC)';
+              selectionFleetSC.value = 'F (SC)';
+              orderSubjectInput.appendChild(selectionFleetSC);
+            } else if (coastalHomeSupplyCentres[in_data.provinceTarget]) {
+              var selectionFleet = document.createElement('option');
+              selectionFleet.innerHTML = 'F';
+              selectionFleet.value = 'F';
+              orderSubjectInput.appendChild(selectionFleet);
+            }
+            orderSubjectInput.value = in_data.buildSubjectValue;
+            ret.left = orderSubjectInput;
+            ret.right = orderObjectLabel;
+            ret.getOrder = function () {
+              if (orderSubjectInput.value === 'A' || orderSubjectInput.value === 'F') {
+                return {
+                  greatPower : in_data.greatPower,
+                  unit : orderSubjectInput.value,
+                  provinceTarget : in_data.provinceTarget,
+                  orderObject : 'Build'
+                };
+              } else if (orderSubjectInput.value === 'F (NC)') {
+                return {
+                  greatPower : in_data.greatPower,
+                  unit : 'F',
+                  provinceTarget : in_data.provinceTarget + ' NC',
+                  orderObject : 'Build'
+                };
+              } else if (orderSubjectInput.value === 'F (SC)') {
+                return {
+                  greatPower : in_data.greatPower,
+                  unit : 'F',
+                  provinceTarget : in_data.provinceTarget + ' SC',
+                  orderObject : 'Build'
+                };
+              } else {
+                return null;
+              }
+            };
+          }
+        } else {
+          var orderSubjectLabel = document.createElement('span');
+          orderSubjectLabel.innerHTML = in_data.unit + ' ' + in_data.provinceTarget;
+          var orderObjectInput = document.createElement('input');
+          if (in_data.orderObject) {
+            orderObjectInput.value = in_data.orderObject;
+          }
+          ret.left = orderSubjectLabel;
+          ret.right = orderObjectInput;
+          ret.getOrder = function () {
+            return {
+              greatPower : in_data.greatPower,
+              unit : in_data.unit,
+              provinceTarget : in_data.provinceTarget,
+              orderObject : orderObjectInput.value
+            };
+          };
         }
-        span.appendChild(span.orderObjectInput);
-        return span;
+        return ret;
       };
 
       var button = function (in_text, in_click) {
@@ -868,6 +1224,108 @@
         return g;
       };
 
+      var supplyCentres = {
+        'Norway' : true,
+        'Sweden' : true,
+        'Denmark' : true,
+        'St. Petersburg' : true,
+        'Moscow' : true,
+        'Sevastopol' : true,
+        'Ankara' : true,
+        'Smyrna' : true,
+        'Constantinople' : true,
+        'Rumania' : true,
+        'Bulgaria' : true,
+        'Greece' : true,
+        'Serbia' : true,
+        'Warsaw' : true,
+        'Budapest' : true,
+        'Vienna' : true,
+        'Trieste' : true,
+        'Berlin' : true,
+        'Kiel' : true,
+        'Munich' : true,
+        'Venice' : true,
+        'Rome' : true,
+        'Naples' : true,
+        'Tunis' : true,
+        'Spain' : true,
+        'Portugal' : true,
+        'Marseilles' : true,
+        'Paris' : true,
+        'Brest' : true,
+        'Belgium' : true,
+        'Holland' : true,
+        'London' : true,
+        'Liverpool' : true,
+        'Edinburgh' : true
+      };
+
+      var coastalHomeSupplyCentres = {
+        // We don't include st. petersburg, since it has two coasts where
+        // fleets must go, and we handle it in a special case elsewhere.
+        //'St. Petersburg' : true,
+        'Sevastopol' : true,
+        'Ankara' : true,
+        'Smyrna' : true,
+        'Constantinople' : true,
+        'Trieste' : true,
+        'Venice' : true,
+        'Rome' : true,
+        'Naples' : true,
+        'Berlin' : true,
+        'Kiel' : true,
+        'Marseilles' : true,
+        'Brest' : true,
+        'Liverpool' : true,
+        'London' : true,
+        'Edinburgh' : true
+      };
+
+      var ownership = {
+        'Bohemia' : 'Austria',
+        'Budapest' : 'Austria',
+        'Galicia' : 'Austria',
+        'Trieste' : 'Austria',
+        'Tyrolia' : 'Austria',
+        'Vienna' : 'Austria',
+        'Clyde' : 'Austria',
+        'Edinburgh' : 'England',
+        'Liverpool' : 'England',
+        'London' : 'England',
+        'Wales' : 'England',
+        'Yorkshire' : 'England',
+        'Brest' : 'France',
+        'Burgundy' : 'France',
+        'Gascony' : 'France',
+        'Marseilles' : 'France',
+        'Paris' : 'France',
+        'Picardy' : 'France',
+        'Berlin' : 'Germany',
+        'Kiel' : 'Germany',
+        'Munich' : 'Germany',
+        'Prussia' : 'Germany',
+        'Ruhr' : 'Germany',
+        'Silesia' : 'Germany',
+        'Apulia' : 'Italy',
+        'Naples' : 'Italy',
+        'Piedmont' : 'Italy',
+        'Rome' : 'Italy',
+        'Tuscany' : 'Italy',
+        'Venice' : 'Italy',
+        'Livonia' : 'Russia',
+        'Moscow' : 'Russia',
+        'Sevastopol' : 'Russia',
+        'St. Petersburg' : 'Russia',
+        'Ukraine' : 'Russia',
+        'Warsaw' : 'Russia',
+        'Ankara' : 'Turkey',
+        'Armenia' : 'Turkey',
+        'Constantinople' : 'Turkey',
+        'Smyrna' : 'Turkey',
+        'Syria' : 'Turkey'
+      };
+
       var unitOccupationLocationMap = {
         'Adriatic Sea' : { x : 296, y : 441 },
         'Aegean Sea' : { x : 403, y : 524 },
@@ -942,7 +1400,7 @@
         'Tunis' : { x : 212, y : 542 },
         'Tuscany' : { x : 247, y : 430 },
         'Tyrolia' : { x : 277, y : 378 },
-        'Tyrrhenian Sea' : { x : 346, y : 483 },
+        'Tyrrhenian Sea' : { x : 246, y : 483 },
         'Ukraine' : { x : 427, y : 327 },
         'Venice' : { x : 250, y : 408 },
         'Vienna' : { x : 314, y : 360 },
@@ -1163,7 +1621,7 @@
     <g id="Irish Sea" title="Irish Sea">
       <polygon class="w" points="100,291 112,287 122,281 130,282 127,276 119,272 116,272 115,265 128,262 126,256 121,257 132,250 135,250 139,240 136,229 130,227 120,227 110,232 109,246 98,259 87,257
         70,261 58,273 88,303"/>
-      <text x="95" y="270">Iri/text>
+      <text x="95" y="270">Iri</text>
     </g>
     <g id="Kiel" title="Kiel">
       <polygon class="l" points="244,254 243,257 245,263 244,270 244,273 235,277 234,274 230,273 226,275 227,280 225,292 220,298 215,297 213,302 232,308 241,316 243,322 263,310 261,296 264,293
