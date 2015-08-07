@@ -95,6 +95,9 @@ data GameState where
         -> Elapsed
         -- ^ Unix epoch time when this game was last advanced or when it was
         --   started.
+        -> Bool
+        -- ^ True iff the game is paused, meaning it should not advance
+        --   automatically after a set amount of time.
         -> GameState
 
 deriving instance Generic GameState
@@ -110,18 +113,20 @@ data GameStateView where
         -> Duration
         -> Duration
         -> Elapsed
+        -> Bool
         -> GameStateView
 
 gameStateViewMetadata :: GameStateView -> Maybe GameMetadata
 gameStateViewMetadata view = case view of
     GameNotStartedView -> Nothing
-    GameStartedView greatPowers games duration secondDuration elapsed -> Just $ GameMetadata {
+    GameStartedView greatPowers games duration secondDuration elapsed paused -> Just $ GameMetadata {
           metadataGreatPowers = S.map GreatPower greatPowers
         , metadataTurn = turn
         , metadataRound = round
         , metadataDuration = duration
         , metadataSecondDuration = secondDuration
         , metadataElapsed = elapsed
+        , metadataPaused = paused
         }
       where
         game = Data.AtLeast.head games
@@ -153,7 +158,7 @@ findGame turn round games =
 gameStateViewResolution :: Turn -> Round -> GameStateView -> Maybe GameResolution
 gameStateViewResolution turn round view = case view of
     GameNotStartedView -> Nothing
-    GameStartedView _ games _ _ _ -> case findGame turn round games of
+    GameStartedView _ games _ _ _ _ -> case findGame turn round games of
         Nothing -> Nothing
         Just (SomeGame game) -> Just $ case resolve game of
             TypicalGame _ _ _ zonedResolvedOrders control -> GameResolutionTypical (M.map mapper zonedResolvedOrders) (M.map GreatPower control)
@@ -175,7 +180,7 @@ gameStateViewResolution turn round view = case view of
 gameStateViewData :: Turn -> Round -> GameStateView -> Maybe GameData
 gameStateViewData turn round view = case view of
     GameNotStartedView -> Nothing
-    GameStartedView greatPowers games _ _ _ -> case findGame turn round games of
+    GameStartedView greatPowers games _ _ _ _ -> case findGame turn round games of
         Nothing -> Nothing
         Just (SomeGame game) -> Just $ case game of
             TypicalGame _ _ _ zonedOrders control -> GameDataTypical (M.map (mapper greatPowers) zonedOrders) (M.map GreatPower control)
@@ -201,6 +206,7 @@ data GameMetadata = GameMetadata {
     , metadataDuration :: Duration
     , metadataSecondDuration :: Duration
     , metadataElapsed :: Elapsed
+    , metadataPaused :: Bool
     }
 
 instance ToJSON GameMetadata where
@@ -211,6 +217,7 @@ instance ToJSON GameMetadata where
         , "duration" .= duration
         , "secondDuration" .= secondDuration
         , "elapsed" .= secondsElapsed
+        , "paused" .= paused
         ]
       where
         greatPowers = metadataGreatPowers metadata
@@ -234,6 +241,7 @@ instance ToJSON GameMetadata where
               "hours" .= secondHours
             , "minutes" .= secondMinutes
             ]
+        paused = metadataPaused metadata
 
 -- TODO implement this.
 instance JSONSchema GameMetadata
@@ -353,11 +361,11 @@ gameStateMatchCredentials creds gameState = case gameState of
         Just ud -> case pwd == UD.password ud of
             False -> Nothing
             True -> Just GameNotStartedView
-    GameStarted map someGames duration duration' elapsed -> case M.lookup uname map of
+    GameStarted map someGames duration duration' elapsed paused -> case M.lookup uname map of
         Nothing -> Nothing
         Just ud -> case pwd == UD.password ud of
             False -> Nothing
-            True -> Just (GameStartedView (UD.greatPower ud) someGames duration duration' elapsed)
+            True -> Just (GameStartedView (UD.greatPower ud) someGames duration duration' elapsed paused)
   where
     uname = Cred.username creds
     pwd = Cred.password creds

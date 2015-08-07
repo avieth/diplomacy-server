@@ -86,13 +86,13 @@ resource = mkResourceId
         modifier :: SomeGame -> GameState -> GameState
         modifier (SomeGame x) state = case state of
             GameNotStarted y duration duration' -> GameNotStarted y duration duration' -- Impossible; should not have this case...
-            GameStarted m (AtLeast _ rest) duration duration' elapsed ->
-                GameStarted m (AtLeast (VCons (SomeGame x) VNil) rest) duration duration' elapsed
+            GameStarted m (AtLeast _ rest) duration duration' elapsed paused ->
+                GameStarted m (AtLeast (VCons (SomeGame x) VNil) rest) duration duration' elapsed paused
 
         checkAuthorization :: GameStateView -> ExceptT (Reason IssueOrdersError) (ReaderT GameId Server) ()
         checkAuthorization gameStateView = case gameStateView of
             GameNotStartedView -> return ()
-            GameStartedView greatPowers _ _ _ _ ->
+            GameStartedView greatPowers _ _ _ _ _ ->
                 if issuedOrdersGreatPowers issuedOrders `S.isSubsetOf` (S.map GreatPower greatPowers)
                 then return ()
                 else throwE NotAllowed
@@ -100,7 +100,7 @@ resource = mkResourceId
         issueOrders' :: GameStateView -> ExceptT (Reason IssueOrdersError) (ReaderT GameId Server) (IssueOrdersOutput, SomeGame)
         issueOrders' gameStateView = case gameStateView of
             GameNotStartedView -> throwE (domainReason IssueOrdersGameNotStarted)
-            GameStartedView _ (AtLeast (VCons (SomeGame someGame) VNil) _) _ _ _ -> case (someGame, issuedOrders) of
+            GameStartedView _ (AtLeast (VCons (SomeGame someGame) VNil) _) _ _ _ _ -> case (someGame, issuedOrders) of
                 (TypicalGame TypicalRoundOne Unresolved x y z, Typical os) -> issueOrders'' os someGame
                 (RetreatGame RetreatRoundOne Unresolved _ _ _ _ _, Retreat os) -> issueOrders'' os someGame
                 (TypicalGame TypicalRoundTwo Unresolved x y z, Typical os) -> issueOrders'' os someGame
