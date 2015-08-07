@@ -464,7 +464,6 @@
 
         if (!in_game.resolved) {
           // Inputs for orders.
-          var orderTable = document.createElement('table');
           var greatPowers = in_metadata.greatPowers;
           var phase = 'Typical';
           if (in_round === 1 || in_round === 3) {
@@ -474,55 +473,74 @@
           }
           var orderForm = document.createElement('form');
           orderForm.id = 'orderForm';
+          var orderTable = document.createElement('table');
+          orderForm.appendChild(orderTable);
           // Identifying when we can give an order... for lack of any proper
           // design in this client, we just check that the third component of
           // an entry is not null, in which case its the current order, and we
           // assume that this unit is under the user's control.
           var orderEntries = [];
-          if (phase === 'Typical') {
-            for (var i in occupation) {
-              if (occupation[i][2]) {
-                // Above test passes only if this client has control over the
-                // great power who owns this entry.
-                var orderEntry = makeOrderEntry({
-                  provinceTarget : i,
-                  greatPower : occupation[i][0],
-                  unit : occupation[i][1],
-                  orderObject : occupation[i][2]
-                });
-                orderEntries.push(orderEntry);
-                var tr = document.createElement('tr');
-                var tdl = document.createElement('td');
-                tdl.appendChild(orderEntry.left);
-                var tdr = document.createElement('td');
-                tdr.appendChild(orderEntry.right);
-                tr.appendChild(tdl);
-                tr.appendChild(tdr);
-                orderTable.appendChild(tr);
+          for (var k in greatPowers) {
+            var tdGreatPowerLabel = document.createElement('td');
+            tdGreatPowerLabel.style.fontStyle = 'italic';
+            tdGreatPowerLabel.innerHTML = greatPowers[k];
+            tdGreatPowerLabel.setAttribute('colspan', 2);
+            trGreatPowerLabel = document.createElement('tr');
+            trGreatPowerLabel.appendChild(tdGreatPowerLabel);
+            orderTable.appendChild(trGreatPowerLabel);
+            if (phase === 'Typical') {
+              var atLeastOneOrder = false;
+              for (var i in occupation) {
+                if (greatPowers[k] === occupation[i][0] && occupation[i][2]) {
+                  var atLeastOneOrder = true;
+                  // Above test passes only if this client has control over the
+                  // great power who owns this entry.
+                  var orderEntry = makeOrderEntry({
+                    provinceTarget : i,
+                    greatPower : occupation[i][0],
+                    unit : occupation[i][1],
+                    orderObject : occupation[i][2]
+                  });
+                  orderEntries.push(orderEntry);
+                  var tr = document.createElement('tr');
+                  var tdl = document.createElement('td');
+                  tdl.appendChild(orderEntry.left);
+                  var tdr = document.createElement('td');
+                  tdr.appendChild(orderEntry.right);
+                  tr.appendChild(tdl);
+                  tr.appendChild(tdr);
+                  orderTable.appendChild(tr);
+                }
               }
-            }
-          } else if (phase === 'Retreat') {
-            for (var i in dislodgement) {
-              if (dislodgement[i][2]) {
-                var orderEntry = makeOrderEntry({
-                  provinceTarget : i,
-                  greatPower : dislodgement[i][0],
-                  unit : dislodgement[i][1],
-                  orderObject : dislodgement[i][2]
-                });
-                orderEntries.push(orderEntry);
-                var tr = document.createElement('tr');
-                var tdl = document.createElement('td');
-                tdl.appendChild(orderEntry.left);
-                var tdr = document.createElement('td');
-                tdr.appendChild(orderEntry.right);
-                tr.appendChild(tdl);
-                tr.appendChild(tdr);
-                orderTable.appendChild(tr);
+              if (!atLeastOneOrder) {
+                orderTable.removeChild(trGreatPowerLabel);
               }
-            }
-          } else if (phase === 'Adjust') {
-            for (var k in greatPowers) {
+            } else if (phase === 'Retreat') {
+              var atLeastOneOrder = false;
+              for (var i in dislodgement) {
+                if (greatPowers[k] === dislodgement[i][0] && dislodgement[i][2]) {
+                  var atLeastOneOrder = true;
+                  var orderEntry = makeOrderEntry({
+                    provinceTarget : i,
+                    greatPower : dislodgement[i][0],
+                    unit : dislodgement[i][1],
+                    orderObject : dislodgement[i][2]
+                  });
+                  orderEntries.push(orderEntry);
+                  var tr = document.createElement('tr');
+                  var tdl = document.createElement('td');
+                  tdl.appendChild(orderEntry.left);
+                  var tdr = document.createElement('td');
+                  tdr.appendChild(orderEntry.right);
+                  tr.appendChild(tdl);
+                  tr.appendChild(tdr);
+                  orderTable.appendChild(tr);
+                }
+              }
+              if (!atLeastOneOrder) {
+                orderTable.removeChild(trGreatPowerLabel);
+              }
+            } else if (phase === 'Adjust') {
               var controlledSupplyCentres = [];
               for (var i in control) {
                 if (supplyCentres[i] === true && greatPowers[k] === control[i]) {
@@ -537,14 +555,19 @@
                 }
               }
               var deficit = controlledUnits.length - controlledSupplyCentres.length;
+              var atLeastOneOrder = false;
               if (deficit === 0) {
                 // Everybody must continue; no need to show any controls.
               } else if (deficit > 0) {
                 // Show disband options for all units; server should not accept
                 // more disbands than the difference.
                 // This is done via checkboxes for each unit.
+                var span = document.createElement('span');
+                var unitString = (deficit === 1) ? 'unit.' : 'units.';
+                tdGreatPowerLabel.innerHTML = greatPowers[k] + ' must disband ' + String(deficit) + ' ' + unitString;
                 for (var i in occupation) {
                   if (greatPowers[k] === occupation[i][0]) {
+                    atLeastOneOrder = true;
                     var orderEntry = makeOrderEntry({
                       phase : 'Adjust',
                       provinceTarget : i,
@@ -570,16 +593,19 @@
                 // home supply centre.
                 // We take special care for St. Petersburg, in which we must
                 // show options for itself and for both coasts.
+                var unitString = (deficit === -1) ? 'unit.' : 'units.';
+                tdGreatPowerLabel.innerHTML += ' may build at most ' + String(-deficit) + ' ' + unitString;
                 for (var i in supplyCentres) {
                   if ( ownership[i] === greatPowers[k]
                     && control[i] === greatPowers[k]
                     && (!occupation[i] || occupation[i][2] === 'Build')) {
-                    var orderEntry
+                    var orderEntry;
                     if (i === 'St. Petersburg') {
                       if ( (occupation['St. Petersburg NC'] && occupation['St. Petersburg NC'][2] !== 'Build')
                         || (occupation['St. Petersburg SC'] && occupation['St. Petersburg SC'][2] !== 'Build')) {
                         continue;
                       } else {
+                        var atLeastOneOrder = true;
                         // Special controls for the multi-coast home supply
                         // centre: a 4-option dropdown
                         //   -
@@ -602,6 +628,7 @@
                         });
                       }
                     } else {
+                      atLeastOneOrder = true;
                       var buildSubjectValue = '-';
                       if (occupation[i] && occupation[i][2] === 'Build') {
                         buildSubjectValue = occupation[i][1];
@@ -624,6 +651,9 @@
                     orderTable.appendChild(tr);
                   }
                 }
+              }
+              if (!atLeastOneOrder) {
+                orderTable.removeChild(trGreatPowerLabel);
               }
             }
           }
@@ -653,7 +683,6 @@
           var submitButton = document.createElement('input');
           submitButton.type = 'submit';
           submitButton.value = 'Issue orders'
-          orderForm.appendChild(orderTable);
           orderForm.appendChild(submitButton);
           if (orderEntries.length > 0) {
             tdOrders.appendChild(orderForm);
