@@ -327,17 +327,31 @@
         var tdNextButton = document.createElement('td');
         var nextButton = document.createElement('input');
         nextButton.type = 'button';
-        tdNextButton.appendChild(nextButton);
         if (in_turn === in_metadata.turn && in_round === in_metadata.round) {
           nextButton.value = 'Refresh';
         } else {
           nextButton.value = 'Next';
+          var latestButton = document.createElement('input');
+          latestButton.type = 'button';
+          latestButton.value = 'Latest';
+          tdNextButton.appendChild(latestButton);
+          latestButton.addEventListener('click', function (in_event) {
+            fetchMetadata(in_gameId, in_username, in_password, function (in_error, in_metadata) {
+              if (in_error) {
+                uiError(in_container, 'Could not fetch metadata.', function () {
+                  uiInitial(in_container);
+                });
+              } else {
+                uiPlayGame(in_container, in_gameId, in_username, in_password, in_metadata);
+              }
+            });
+          });
         }
+        tdNextButton.appendChild(nextButton);
         tdNextButton.addEventListener('click', function (in_event) {
           if (in_turn === in_metadata.turn && in_round === in_metadata.round) {
             // Here we must reload the metadata and the game but stick to a
             // particular round!
-            uiPlayGame(in_container, in_gameId, in_username, in_password, in_metadata, null, null);
             fetchMetadata(in_gameId, in_username, in_password, function (in_error, in_metadata) {
               if (in_error) {
                 uiError(in_container, 'Could not fetch metadata.', function () {
