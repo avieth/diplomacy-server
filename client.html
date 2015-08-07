@@ -130,6 +130,25 @@
             }
           },
           {
+            text : 'Pause',
+            click : function () {
+              uiGameId(in_container, function (in_gameId) {
+                uiUsername(in_container, function (in_username) {
+                  uiPassword(in_container, function (in_password) {
+                    pauseGame(in_container, in_gameId, in_username, in_password, function (in_error) {
+                      if (in_error) {
+                        uiInitial(in_container);
+                      } else {
+                        uiInitial(in_container);
+                      }
+                    });
+                  });
+                });
+              });
+            }
+          },
+
+          {
             text : 'Destroy',
             click : function () {
               uiGameId(in_container, function (in_gameId) {
@@ -294,29 +313,34 @@
 
         var tdCounter = document.createElement('td');
         var updateCounter = function () {
-          var secondsElapsed = ((new Date().getTime() / 1000) - in_metadata.elapsed)
-          var duration = {
-            hours : (latestPhase === 'Typical') ? in_metadata.duration.hours : in_metadata.secondDuration.hours,
-            minutes : (latestPhase === 'Typical') ? in_metadata.duration.minutes : in_metadata.secondDuration.minutes
-          };
-          var durationSeconds = duration.hours * 60 * 60 + duration.minutes * 60;
-          var secondsRemaining = Math.max(0, durationSeconds - secondsElapsed);
-          var minutesRemaining = secondsRemaining / 60;
-          var hoursRemaining = minutesRemaining / 60;
-          var hoursRemainingText = String(Math.floor(hoursRemaining));
-          var minutesRemainingText = String(Math.floor(minutesRemaining) % 60);
-          var secondsRemainingText = String(Math.floor(secondsRemaining) % 60);
-          if (minutesRemainingText.length === 1) {
-            minutesRemainingText = '0' + minutesRemainingText;
+          var paused = !!in_metadata.paused;
+          if (paused) {
+            tdCounter.innerHTML = 'Paused';
+          } else {
+            var secondsElapsed = ((new Date().getTime() / 1000) - in_metadata.elapsed)
+            var duration = {
+              hours : (latestPhase === 'Typical') ? in_metadata.duration.hours : in_metadata.secondDuration.hours,
+              minutes : (latestPhase === 'Typical') ? in_metadata.duration.minutes : in_metadata.secondDuration.minutes
+            };
+            var durationSeconds = duration.hours * 60 * 60 + duration.minutes * 60;
+            var secondsRemaining = Math.max(0, durationSeconds - secondsElapsed);
+            var minutesRemaining = secondsRemaining / 60;
+            var hoursRemaining = minutesRemaining / 60;
+            var hoursRemainingText = String(Math.floor(hoursRemaining));
+            var minutesRemainingText = String(Math.floor(minutesRemaining) % 60);
+            var secondsRemainingText = String(Math.floor(secondsRemaining) % 60);
+            if (minutesRemainingText.length === 1) {
+              minutesRemainingText = '0' + minutesRemainingText;
+            }
+            if (secondsRemainingText.length === 1) {
+              secondsRemainingText = '0' + secondsRemainingText;
+            }
+            tdCounter.innerHTML = [
+              hoursRemainingText,
+              minutesRemainingText,
+              secondsRemainingText
+            ].join(':');
           }
-          if (secondsRemainingText.length === 1) {
-            secondsRemainingText = '0' + secondsRemainingText;
-          }
-          tdCounter.innerHTML = [
-            hoursRemainingText,
-            minutesRemainingText,
-            secondsRemainingText
-          ].join(':');
         };
         updateCounter();
         animationFrameCallbacks.push(updateCounter);
@@ -973,6 +997,15 @@
           password : in_password
         };
         xhr.send(JSON.stringify(credentials));
+      };
+
+      var pauseGame = function (in_container, in_gameId, in_username, in_password, in_callback) {
+        var route = window.location + '/game/' + in_gameId + '/pause';
+        var data = {
+          username : in_username,
+          password : in_password
+        };
+        fetch('PUT', route, data, in_callback);
       };
 
       var destroyGame = function (in_container, in_gameId, in_username, in_password, in_callback) {
