@@ -33,7 +33,6 @@ import Data.JSON.Schema
 import Rest
 import Rest.Resource as R
 import Diplomacy.Game
-import Diplomacy.SupplyCentreDefecit
 import Types.Server
 import Types.GameId
 import Types.Credentials
