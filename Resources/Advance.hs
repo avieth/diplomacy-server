@@ -34,7 +34,7 @@ import Data.JSON.Schema
 import Rest
 import Rest.Resource as R
 import Diplomacy.Game
-import Diplomacy.SupplyCentreDefecit
+import Diplomacy.SupplyCentreDeficit
 import Types.Server
 import Types.GameId
 import Types.Credentials
@@ -103,8 +103,8 @@ advance (SomeGame game) = case game of
             continued = continue resolved
             occupation = gameOccupation continued
             control = gameControl continued
-            defecits = fmap (\greatPower -> supplyCentreDefecit greatPower occupation control) [minBound..maxBound]
-        in  if all (== 0) defecits
+            deficits = fmap (\greatPower -> supplyCentreDeficit greatPower occupation control) [minBound..maxBound]
+        in  if all (== 0) deficits
             -- Automatically skip adjust phases where nobody has a deficit,
             -- positive or negative.
             -- TODO must also check that, in case there's a negative
