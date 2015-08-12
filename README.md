@@ -70,3 +70,12 @@ these clients. This way, we don't need to reproduce the basic definitions like
 those related to provinces and their adjacency, and we could also use order
 validation definitions to give helpful feedback when the user attempts to input
 a new order (highlighting valid move targets or support subjects, for instance).
+
+## A note on REST
+
+This program uses the rest package, but it doesn't give a RESTful API; the
+server *is* stateful. This package was chosen because it was relatively
+quick and easy. It ought to be swapped out for something which
+
+1. Does not claim to be RESTful.
+2. Allows us to easily reuse handlers for HTTP and Email input.
