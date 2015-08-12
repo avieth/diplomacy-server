@@ -41,7 +41,7 @@ the server running, navigate to `https://<host>:4347/v1.0.0/diplomacy` to
 begin playing via the simple but effective web client. The workflow is as
 follows:
 
-1. Administartor creates a game, chossing a password for it.
+1. Administartor creates a game, choosing a password for it.
 2. Players join the game using the administartor's chosen password.
 3. Adminstrator starts the game.
 4. Players use their own devices (smartphones, laptops) to view game state and
