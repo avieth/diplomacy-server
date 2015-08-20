@@ -16,8 +16,32 @@ build-type:          Simple
 extra-source-files:  README.md
 cabal-version:       >=1.10
 
+extra-source-files: ./client.html
+
 executable diplomacy-server
   main-is:             Main.hs
+  Hs-Source-Dirs:      ./
+  Other-Modules:       Types.Credentials
+                     , Types.GameId
+                     , Types.Server
+                     , Types.GameState
+                     , Types.GreatPower
+                     , Types.Order
+                     , Types.ServerOptions
+                     , Types.UserData
+                     , Types.Unit
+                     , Resources.Advance
+                     , Resources.Client
+                     , Resources.Game
+                     , Resources.Game.Create
+                     , Resources.Game.Remove
+                     , Resources.Join
+                     , Resources.Metadata
+                     , Resources.Order
+                     , Resources.Pause
+                     , Resources.Resolution
+                     , Resources.Start
+                     , Router
   -- other-modules:       
   other-extensions:    AutoDeriveTypeable
                      , RankNTypes
