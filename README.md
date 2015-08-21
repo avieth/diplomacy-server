@@ -27,8 +27,8 @@ openssl req -x509 -newkey rsa:2048 -keyout server.key -out server.pem -days 365 
 ```
 
 When running the server, the key and certificate file locations can be
-specified using `-k` and `-c` respectively; the defaults are `./server.key` and
-`./server.pem`. When running the server you must also give a username and
+specified using `-k` and `-c` respectively; the defaults are `./key.pem` and
+`./certificate.pem`. When running the server you must also give a username and
 password for the administrator. These credentials allows you to create, start,
 advance, pause, and destroy games.
 
