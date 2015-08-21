@@ -43,7 +43,8 @@ follows:
 
 1. Administartor creates a game, choosing a password for it.
 2. Players join the game using the administartor's chosen password.
-3. Adminstrator starts the game.
+3. Adminstrator starts the game. A game cannot be started unless there are at
+   least 3 players in the game. Two player diplomacy is not supported.
 4. Players use their own devices (smartphones, laptops) to view game state and
    issue orders.
 
