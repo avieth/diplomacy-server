@@ -101,7 +101,7 @@ data GameState where
         -> GameState
 
 deriving instance Generic GameState
-instance NFData GameState
+instance NFData GameState where rnf x = seq x ()
 
 -- | The game state viewed as a certain player, who controls a set of
 --   GreatPowers.
