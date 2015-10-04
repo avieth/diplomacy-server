@@ -183,21 +183,41 @@ gameStateViewData turn round view = case view of
     GameStartedView greatPowers games _ _ _ _ -> case findGame turn round games of
         Nothing -> Nothing
         Just (SomeGame game) -> Just $ case game of
-            TypicalGame _ _ _ zonedOrders control -> GameDataTypical (M.map (mapper greatPowers) zonedOrders) (M.map GreatPower control)
-            RetreatGame _ _ _ _ zonedOrders occupation control -> GameDataRetreat (M.map (mapper greatPowers) zonedOrders) (M.map (fmap Unit) occupation) (M.map GreatPower control)
-            AdjustGame _ _ _ zonedOrders control -> GameDataAdjust (M.map (mapper greatPowers) zonedOrders) (M.map GreatPower control)
+            TypicalGame _ _ _ zonedOrders control -> GameDataTypical (M.map (picker greatPowers) zonedOrders) (M.map GreatPower control)
+            RetreatGame _ _ _ _ zonedOrders occupation control -> GameDataRetreat (M.map (picker greatPowers) zonedOrders) (M.map (fmap Unit) occupation) (M.map GreatPower control)
+            AdjustGame _ _ _ zonedOrders control -> GameDataAdjust (M.mapMaybe (pickerAdjust greatPowers) zonedOrders) (M.map GreatPower control)
   where
-    mapper
+    -- | Picks the units and order objects to show: only objects for a great
+    --   power in the parameter set are chosen.
+    picker
         :: S.Set DGP.GreatPower
         -> (Aligned DU.Unit, DOO.SomeOrderObject phase)
         -> (Aligned Unit, Maybe (SomeOrderObject phase))
-    mapper greatPowers (aunit, someOrderObject) = (align unit greatPower, maybeSomeOrderObject)
+    picker greatPowers (aunit, someOrderObject) = (align unit greatPower, maybeSomeOrderObject)
       where
         greatPower = alignedGreatPower aunit
         unit = Unit (alignedThing aunit)
         maybeSomeOrderObject = case S.member greatPower greatPowers of
             True -> Just (SomeOrderObject someOrderObject)
             False -> Nothing
+    -- | Picks the units and order objects to show, for adjust phase. This is
+    --   different than the other two because we must take special care for
+    --   build order objects! Not only should these *objects* be invisible to
+    --   the other great powers, but so should their *subjects*!!!
+    pickerAdjust
+        :: S.Set DGP.GreatPower
+        -> (Aligned DU.Unit, DOO.SomeOrderObject Adjust)
+        -> Maybe (Aligned Unit, Maybe (SomeOrderObject Adjust))
+    pickerAdjust greatPowers (aunit, someOrderObject) = case someOrderObject of
+        DOO.SomeOrderObject (DOO.BuildObject) -> case S.member greatPower greatPowers of
+            True -> Just (align unit greatPower, Just (SomeOrderObject someOrderObject))
+            False -> Nothing
+        DOO.SomeOrderObject _ -> Just $ case S.member greatPower greatPowers of
+            True -> (align unit greatPower, Just (SomeOrderObject someOrderObject))
+            False -> (align unit greatPower, Nothing)
+      where
+        greatPower = alignedGreatPower aunit
+        unit = Unit (alignedThing aunit)
 
 data GameMetadata = GameMetadata {
       metadataGreatPowers :: S.Set GreatPower
@@ -243,8 +263,26 @@ instance ToJSON GameMetadata where
             ]
         paused = metadataPaused metadata
 
--- TODO implement this.
-instance JSONSchema GameMetadata
+instance JSONSchema GameMetadata where
+    schema _ = Schema.Object [
+          greatPowersField
+        , turnField
+        , roundField
+        , durationField
+        , secondDurationField
+        , elapsedField
+        , pausedField
+        ]
+      where
+        greatPowersField = Field "greatPowers" True (Schema.Array (LengthBound (Just 1) (Just 7)) True (Value unboundedLength))
+        turnField = Field "turn" True (Schema.Number (Bound (Just 0) Nothing))
+        roundField = Field "round" True (Schema.Number (Bound (Just 0) (Just 4)))
+        durationField = Field "duration" True (Schema.Object [hoursField, minutesField])
+        secondDurationField = Field "secondDuration" True (Schema.Object [hoursField, minutesField])
+        elapsedField = Field "elapsed" True (Schema.Number (Bound (Just 0) Nothing))
+        pausedField = Field "paused" True Boolean
+        hoursField = Field "hours" True (Schema.Number (Bound (Just 0) Nothing))
+        minutesField = Field "minutes" True (Schema.Number (Bound (Just 0) (Just 59)))
 
 -- For now we give only a Bool to indicate success or failure (true for
 -- success). In the future we should give the reason. This is not super easy
@@ -281,8 +319,8 @@ instance ToJSON GameResolution where
             , "control" .= control
             ]
 
--- TODO implement this
-instance JSONSchema GameResolution
+instance JSONSchema GameResolution where
+    schema _ = Schema.Object []
 
 data GameData where
     GameDataTypical
@@ -315,8 +353,8 @@ instance ToJSON GameData where
             , "control" .= control
             ]
 
--- TODO implement this
-instance JSONSchema GameData
+instance JSONSchema GameData where
+    schema _ = Schema.Object []
 
 instance ToJSON t => ToJSON (M.Map Zone t) where
     toJSON map = toJSON textKeyedMap
