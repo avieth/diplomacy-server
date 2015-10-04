@@ -100,25 +100,30 @@ resource = mkResourceId
         issueOrders' :: GameStateView -> ExceptT (Reason IssueOrdersError) (ReaderT GameId Server) (IssueOrdersOutput, SomeGame)
         issueOrders' gameStateView = case gameStateView of
             GameNotStartedView -> throwE (domainReason IssueOrdersGameNotStarted)
-            GameStartedView _ (AtLeast (VCons (SomeGame someGame) VNil) _) _ _ _ _ -> case (someGame, issuedOrders) of
-                (TypicalGame TypicalRoundOne Unresolved x y z, Typical os) -> issueOrders'' os someGame
-                (RetreatGame RetreatRoundOne Unresolved _ _ _ _ _, Retreat os) -> issueOrders'' os someGame
-                (TypicalGame TypicalRoundTwo Unresolved x y z, Typical os) -> issueOrders'' os someGame
-                (RetreatGame RetreatRoundTwo Unresolved _ _ _ _ _, Retreat os) -> issueOrders'' os someGame
-                (AdjustGame AdjustRound Unresolved _ _ _, Adjust os) -> issueOrders'' os someGame
+            GameStartedView greatPowers (AtLeast (VCons (SomeGame someGame) VNil) _) _ _ _ _ -> case (someGame, issuedOrders) of
+                (TypicalGame TypicalRoundOne Unresolved x y z, Typical os) -> issueOrders'' greatPowers os someGame
+                (RetreatGame RetreatRoundOne Unresolved _ _ _ _ _, Retreat os) -> issueOrders'' greatPowers os someGame
+                (TypicalGame TypicalRoundTwo Unresolved x y z, Typical os) -> issueOrders'' greatPowers os someGame
+                (RetreatGame RetreatRoundTwo Unresolved _ _ _ _ _, Retreat os) -> issueOrders'' greatPowers os someGame
+                (AdjustGame AdjustRound Unresolved _ _ _, Adjust os) -> issueOrders'' greatPowers os someGame
                 _ -> throwE (domainReason (IssueOrdersWrongPhase))
 
         issueOrders''
             :: forall round .
-               [(GreatPower, SomeOrder (RoundPhase round))]
+               S.Set DGP.GreatPower
+            -> [(GreatPower, SomeOrder (RoundPhase round))]
             -> Game round RoundUnresolved
             -> ExceptT (Reason IssueOrdersError) (ReaderT GameId Server) (IssueOrdersOutput, SomeGame)
-        issueOrders'' orders game = return $ case game of
+        issueOrders'' greatPowers orders game = return $ case game of
             TypicalGame TypicalRoundOne _ _ _ _ -> (IssueOrdersOutputTypical, SomeGame . snd $ Game.issueOrders ordersMap game)
             TypicalGame TypicalRoundTwo _ _ _ _ -> (IssueOrdersOutputTypical, SomeGame . snd $ Game.issueOrders ordersMap game)
             RetreatGame RetreatRoundOne _ _ _ _ _ _ -> (IssueOrdersOutputRetreat, SomeGame . snd $ Game.issueOrders ordersMap game)
             RetreatGame RetreatRoundTwo _ _ _ _ _ _ -> (IssueOrdersOutputRetreat, SomeGame . snd $ Game.issueOrders ordersMap game)
-            AdjustGame AdjustRound _ _ _ _ -> (IssueOrdersOutputAdjust, SomeGame . snd $ Game.issueOrders ordersMap game)
+            -- We are careful to remove all build orders for the relevant great powers.
+            -- This is *essential* because without it, it's not in general
+            -- possible to go from having >0 build orders to 0 build orders:
+            -- you issue an empty order set and everything remains the same!
+            AdjustGame AdjustRound _ _ _ _ -> (IssueOrdersOutputAdjust, SomeGame . snd $ Game.issueOrders ordersMap $ Game.removeBuildOrders greatPowers game)
           where
             ordersMap :: M.Map Zone (Aligned Unit, DOO.SomeOrderObject (RoundPhase round))
             ordersMap = foldr insertOrder M.empty orders
