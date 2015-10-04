@@ -192,7 +192,7 @@ parseMove = do
 
 parseSupport :: Parser (DOO.OrderObject Typical Support)
 parseSupport = do
-    char 'S'
+    (char 'S' <|> char 's')
     spaces
     subject <- parseSubject
     target <- Text.Parsec.option (subjectProvinceTarget subject) (try rest)
@@ -206,7 +206,7 @@ parseSupport = do
 
 parseConvoy :: Parser (DOO.OrderObject Typical Convoy)
 parseConvoy = do
-    char 'C'
+    (char 'C' <|> char 'c')
     spaces
     subject <- parseSubject
     spaces
