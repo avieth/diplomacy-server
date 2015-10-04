@@ -934,18 +934,18 @@
               in_callback(true);
             });
           } else {
-            uiError(in_container, 'Expected error is unexpected', function () {
+            uiError(in_container, 'Unexpected error is unexpected', function () {
               in_callback(true);
             });
           }
         });
         xhr.addEventListener('error', function (in_event) {
-          uiError(in_container, 'Expected error is unexpected', function () {
+          uiError(in_container, 'Unexpected error is unexpected', function () {
             in_callback(true);
           });
         });
         xhr.addEventListener('abort', function (in_event) {
-          uiError(in_container, 'Expected error is unexpected', function () {
+          uiError(in_container, 'Unexpected error is unexpected', function () {
             in_callback(true);
           });
         });
@@ -976,18 +976,18 @@
               in_callback(true);
             });
           } else {
-            uiError(in_container, 'Expected error is unexpected', function () {
+            uiError(in_container, 'Unexpected error is unexpected', function () {
               in_callback(true);
             });
           }
         });
         xhr.addEventListener('error', function (in_event) {
-          uiError(in_container, 'Expected error is unexpected', function () {
+          uiError(in_container, 'Unexpected error is unexpected', function () {
             in_callback(true);
           });
         });
         xhr.addEventListener('abort', function (in_event) {
-          uiError(in_container, 'Expected error is unexpected', function () {
+          uiError(in_container, 'Unexpected error is unexpected', function () {
             in_callback(true);
           });
         });
@@ -1065,18 +1065,18 @@
               in_callback(true);
             });
           } else {
-            uiError(in_container, 'Expected error is unexpected', function () {
+            uiError(in_container, 'Unexpected error is unexpected', function () {
               in_callback(true);
             });
           }
         });
         xhr.addEventListener('error', function (in_event) {
-          uiError(in_container, 'Expected error is unexpected', function () {
+          uiError(in_container, 'Unexpected error is unexpected', function () {
             in_callback(true);
           });
         });
         xhr.addEventListener('abort', function (in_event) {
-          uiError(in_container, 'Expected error is unexpected', function () {
+          uiError(in_container, 'Unexpected error is unexpected', function () {
             in_callback(true);
           });
         });
@@ -1109,6 +1109,7 @@
             orderSubjectLabel.innerHTML = in_data.unit + ' ' + in_data.provinceTarget;
             var orderObjectInput = document.createElement('input');
             orderObjectInput.type = 'checkbox';
+
             if (in_data.orderObject === 'Disband') {
               orderObjectInput.checked = true;
             } else {
@@ -1185,6 +1186,10 @@
           var orderSubjectLabel = document.createElement('span');
           orderSubjectLabel.innerHTML = in_data.unit + ' ' + in_data.provinceTarget;
           var orderObjectInput = document.createElement('input');
+          orderObjectInput.setAttribute('autocorrect', 'off');
+          orderObjectInput.setAttribute('autocomplete', 'off');
+          orderObjectInput.setAttribute('autocapitalize', 'off');
+          orderObjectInput.setAttribute('spellcheck', 'false');
           if (in_data.orderObject) {
             orderObjectInput.value = in_data.orderObject;
           }
@@ -1262,6 +1267,10 @@
         li1.appendChild(label);
         ul.appendChild(li1);
         var input = document.createElement('input');
+        input.setAttribute('autocorrect', 'off');
+        input.setAttribute('autocomplete', 'off');
+        input.setAttribute('autocapitalize', 'off');
+        input.setAttribute('spellcheck', 'false');
         input.type = in_type;
         input.style.display = 'table-cell';
         input.style.verticalAlign = 'middle';
