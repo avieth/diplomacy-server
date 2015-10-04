@@ -21,11 +21,18 @@ import GHC.Generics
 import Data.Typeable
 import Data.Aeson
 import Data.JSON.Schema
+import Data.Char (toLower)
 
 newtype GameId = GameId String
-    deriving (Eq, Ord, Show, Generic)
+    deriving (Show, Generic)
 
 instance FromJSON GameId
 instance ToJSON GameId
 instance JSONSchema GameId where
     schema = gSchema
+
+instance Eq GameId where
+    GameId l == GameId r = fmap toLower l == fmap toLower r
+
+instance Ord GameId where
+    GameId l `compare` GameId r = fmap toLower l `compare` fmap toLower r
