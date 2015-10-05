@@ -487,6 +487,7 @@
         tdMap.appendChild(svgMap);
 
         if (!in_game.resolved) {
+
           // Inputs for orders.
           var greatPowers = in_metadata.greatPowers;
           var phase = 'Typical';
@@ -499,6 +500,20 @@
           orderForm.id = 'orderForm';
           var orderTable = document.createElement('table');
           orderForm.appendChild(orderTable);
+
+          // For hiding orders.
+          var divHideOrders = document.createElement('div');
+          divHideOrders.innerHTML = 'Hide/Show orders';
+          divHideOrders.addEventListener('click', function () {
+            var stat = orderForm.style.visibility;
+            if (stat == 'hidden') {
+              orderForm.style.visibility = 'visible';
+            } else {
+              orderForm.style.visibility = 'hidden';
+            }
+          });
+          tdOrders.appendChild(divHideOrders);
+
           // Identifying when we can give an order... for lack of any proper
           // design in this client, we just check that the third component of
           // an entry is not null, in which case its the current order, and we
