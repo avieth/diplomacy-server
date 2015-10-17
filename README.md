@@ -30,13 +30,14 @@ When running the server, the key and certificate file locations can be
 specified using `-k` and `-c` respectively; the defaults are `./key.pem` and
 `./certificate.pem`. When running the server you must also give a username and
 password for the administrator. These credentials allows you to create, start,
-advance, pause, and destroy games.
+advance, pause, and destroy games. The password is taken after running the
+command, rather than as an argument.
 
 ```bash
-./Main -u <username> -p <password>
+./Main -u <username>
 ```
 
-The default port is `4347`, but this can be changed using `--port`. With
+The default port is `4347`, but this can be changed using `--port` or `-p`. With
 the server running, navigate to `https://<host>:4347/v1.0.0/diplomacy` to
 begin playing via the simple but effective web client. The workflow is as
 follows:

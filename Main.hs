@@ -35,12 +35,14 @@ import Types.Server
 import Types.GameId
 import Router
 import qualified Resources.Advance as Advance
+import System.Console.Haskeline hiding (defaultSettings)
+import qualified System.Console.Haskeline as Haskeline
 
 main :: IO ()
 main = do
     opts <- execParser (info Options.parser mempty)
+    password <- runInputT Haskeline.defaultSettings getThePassword
     let username = adminUsername opts
-    let password = adminPassword opts
     let cert = certificateFile opts
     let key = Options.keyFile opts
     let port = Options.port opts
@@ -54,6 +56,14 @@ main = do
     putStrLn ("Starting secure server on port " ++ show port)
     runTLS (tlsSettings cert key) (setPort port defaultSettings) app
     putStrLn "Goodbye"
+
+  where
+
+    getThePassword = do
+        x <- getPassword (Just '*') "Password:"
+        case x of
+            Nothing -> getThePassword
+            Just x' -> return x'
 
 waiApp :: TVar ServerState -> Application
 waiApp tvar =
