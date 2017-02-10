@@ -21,6 +21,7 @@ import System.FilePath
 import Types.Credentials
 import Options.Applicative
 import Options.Applicative.Builder
+import Data.Monoid ((<>))
 
 data ServerOptions = ServerOptions {
       adminUsername :: Username

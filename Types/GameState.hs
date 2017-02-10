@@ -45,7 +45,7 @@ import Data.TypeNat.Nat
 import Data.Functor.Identity
 import Data.Functor.Constant
 import Data.Hourglass
-import Data.Aeson
+import Data.Aeson hiding (One)
 import Data.JSON.Schema as Schema
 import Diplomacy.Game
 import Diplomacy.Turn
@@ -306,17 +306,17 @@ data GameResolution where
 instance ToJSON GameResolution where
     toJSON gameResolution = case gameResolution of
         GameResolutionTypical zonedResolvedOrders control -> object [
-              "resolved" .= zonedResolvedOrders
-            , "control" .= control
+              "resolved" .= ZoneMap (fmap ResolvedTriple zonedResolvedOrders)
+            , "control" .= ProvinceMap control
             ]
         GameResolutionRetreat zonedResolvedOrders occupation control -> object [
-              "resolved" .= zonedResolvedOrders
-            , "occupation" .= occupation
-            , "control" .= control
+              "resolved" .= ZoneMap (fmap ResolvedTriple zonedResolvedOrders)
+            , "occupation" .= ZoneMap occupation
+            , "control" .= ProvinceMap control
             ]
         GameResolutionAdjust zonedResolvedOrders control -> object [
-              "resolved" .= zonedResolvedOrders
-            , "control" .= control
+              "resolved" .= ZoneMap (fmap ResolvedTriple zonedResolvedOrders)
+            , "control" .= ProvinceMap control
             ]
 
 instance JSONSchema GameResolution where
@@ -340,32 +340,36 @@ data GameData where
 instance ToJSON GameData where
     toJSON gameData = case gameData of
         GameDataTypical zonedOrders control -> object [
-              "occupation" .= zonedOrders
-            , "control" .= control
+              "occupation" .= (ZoneMap (fmap UnresolvedPair zonedOrders))
+            , "control" .= (ProvinceMap control)
             ]
         GameDataRetreat zonedOrders occupation control -> object [
-              "dislodgement" .= zonedOrders
-            , "occupation" .= occupation
-            , "control" .= control
+              "dislodgement" .= (ZoneMap (fmap UnresolvedPair zonedOrders))
+            , "occupation" .= (ZoneMap occupation)
+            , "control" .= (ProvinceMap control)
             ]
         GameDataAdjust zonedOrders control -> object [
-              "occupation" .= zonedOrders
-            , "control" .= control
+              "occupation" .= (ZoneMap (fmap UnresolvedPair zonedOrders))
+            , "control" .= (ProvinceMap control)
             ]
 
 instance JSONSchema GameData where
     schema _ = Schema.Object []
 
-instance ToJSON t => ToJSON (M.Map Zone t) where
-    toJSON map = toJSON textKeyedMap
+newtype ZoneMap t = ZoneMap (M.Map Zone t)
+
+instance ToJSON t => ToJSON (ZoneMap t) where
+    toJSON (ZoneMap map) = toJSON textKeyedMap
       where
         textKeyedMap :: M.Map T.Text t
         textKeyedMap = M.foldWithKey (\z x -> M.insert (zoneToText z) x) M.empty map
         zoneToText :: Zone -> T.Text
         zoneToText = printProvinceTarget . zoneProvinceTarget
 
-instance ToJSON t => ToJSON (M.Map Province t) where
-    toJSON map = toJSON textKeyedMap
+newtype ProvinceMap t = ProvinceMap (M.Map Province t)
+
+instance ToJSON t => ToJSON (ProvinceMap t) where
+    toJSON (ProvinceMap map) = toJSON textKeyedMap
       where
         textKeyedMap :: M.Map T.Text t
         textKeyedMap = M.foldWithKey(\p x -> M.insert (printProvince p) x) M.empty map
@@ -376,14 +380,18 @@ instance ToJSON (Aligned Unit) where
         greatPower = GreatPower (alignedGreatPower aunit)
         unit = alignedThing aunit
 
-instance ToJSON (Aligned Unit, Maybe (SomeOrderObject phase)) where
-    toJSON (aunit, maybeObject) = toJSON (greatPower, unit, maybeObject)
+newtype UnresolvedPair phase = UnresolvedPair (Aligned Unit, Maybe (SomeOrderObject phase))
+
+instance ToJSON (UnresolvedPair phase) where
+    toJSON (UnresolvedPair (aunit, maybeObject)) = toJSON (greatPower, unit, maybeObject)
       where
         greatPower = GreatPower (alignedGreatPower aunit)
         unit = alignedThing aunit
 
-instance ToJSON (Aligned Unit, SomeOrderObject phase, Bool) where
-    toJSON (aunit, object, bool) = toJSON (greatPower, unit, object, bool)
+newtype ResolvedTriple phase = ResolvedTriple (Aligned Unit, SomeOrderObject phase, Bool)
+
+instance ToJSON (ResolvedTriple phase) where
+    toJSON (ResolvedTriple (aunit, object, bool)) = toJSON (greatPower, unit, object, bool)
       where
         greatPower = GreatPower (alignedGreatPower aunit)
         unit = alignedThing aunit

@@ -2,7 +2,7 @@
 -- documentation, see http://haskell.org/cabal/users-guide/
 
 name:                diplomacy-server
-version:             0.1.0.0
+version:             0.2.0.0
 synopsis:            Play Diplomacy over HTTP
 -- description:         
 homepage:            https://github.com/avieth/diplomacy-server
@@ -55,24 +55,24 @@ executable diplomacy-server
                      , FlexibleInstances
                      , KindSignatures
 
-  build-depends:       base >=4.7 && <4.9
+  build-depends:       base >=4.7 && <5
                      , async >=2.0 && <2.1
                      , stm >=2.4 && <2.5
-                     , transformers >=0.3 && <0.5
+                     , transformers >=0.3 && <0.6
                      , containers >=0.5 && <0.6
-                     , diplomacy >=0.1 && <0.2
+                     , diplomacy >=0.2 && <0.3
                      , TypeNat >=0.4 && <0.5
                      , hourglass >=0.2 && <0.3
-                     , rest-core >=0.36 && <0.37
-                     , rest-wai >=0.1 && <0.2
-                     , wai >=3.0 && <3.1
-                     , warp >=3.0 && <3.1
-                     , warp-tls >=3.0 && <3.1
-                     , optparse-applicative >=0.11 && <0.12
-                     , transformers-compat >=0.4 && <0.5
+                     , rest-core >=0.39 && <0.40
+                     , rest-wai >=0.1 && <1.0
+                     , wai >=3.0 && <4.0
+                     , warp >=3.0 && <4.0
+                     , warp-tls >=3.0 && <4.0
+                     , optparse-applicative >=0.11 && <1.0
+                     , transformers-compat >=0.4 && <0.6
                      , bytestring >=0.10 && <0.11
-                     , aeson >=0.9 && <0.10
-                     , json-schema >=0.7 && <0.8
+                     , aeson >=0.9 && <1.1
+                     , json-schema >=0.7 && <1.0
                      , mtl >=2.1 && <3
                      , Stream >=0.4 && <0.5
                      , deepseq >=1.3 && <2

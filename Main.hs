@@ -69,7 +69,7 @@ waiApp :: TVar ServerState -> Application
 waiApp tvar =
     let runner :: forall a . Server a -> IO a
         runner = runDiplomacyServer tvar
-    in  apiToApplication runner api
+    in  apiToApplication runner (Unversioned (Some1 router))
 
 -- To be run in a separate thread; this IO will periodically check every game
 -- and advance it if it's started and hasn't been advanced for longer than its
@@ -118,7 +118,3 @@ advanceDaemon tvar = do
                      in  (gameId : ids, M.insert gameId (pwd, GameStarted m (AtLeast (VCons nextGame VNil) ((SomeGame game) : rest)) duration duration' t False) out)
                 else (ids, M.insert gameId (pwd, GameStarted m (AtLeast (VCons (SomeGame game) VNil) rest) duration duration' elapsed paused) out)
         _ -> (ids, M.insert gameId (pwd, gameState) out)
-
-api = [(mkVersion 1 0 0, Some1 router)]
-
-
