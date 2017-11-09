@@ -15,8 +15,10 @@ Portability : non-portable (GHC only)
 import Control.Concurrent
 import Control.Concurrent.Async
 import Control.Concurrent.STM
+import Control.Monad (void)
 import qualified Data.Map as M
 import Data.AtLeast
+import Data.String (fromString)
 import Data.TypeNat.Vect
 import Data.Monoid
 import Data.Hourglass
@@ -43,19 +45,23 @@ main = do
     opts <- execParser (info Options.parser mempty)
     password <- runInputT Haskeline.defaultSettings getThePassword
     let username = adminUsername opts
-    let cert = certificateFile opts
-    let key = Options.keyFile opts
-    let port = Options.port opts
+        mSecure = (,) <$> certificateFile opts <*> Options.keyFile opts
+        host = Options.host opts
+        port = Options.port opts
+        warpSettings = setPort port . setHost (fromString host) $ defaultSettings
     initialState <- serverState username password
     tvar <- newTVarIO initialState
     let app = waiApp tvar
-    let daemon = advanceDaemon tvar
-    async daemon
-    --x <- mkJsApi (ModuleName "diplomacy") True (mkVersion 1 0 0) (router)
-    --putStrLn x
-    putStrLn ("Starting secure server on port " ++ show port)
-    runTLS (tlsSettings cert key) (setPort port defaultSettings) app
-    putStrLn "Goodbye"
+        daemon = advanceDaemon tvar
+    withAsync daemon $ \_ -> do
+      case mSecure of
+        Just (cert, key) -> do
+          putStrLn $ "Running secure server"
+          runTLS (tlsSettings cert key) warpSettings app
+        Nothing -> do
+          putStrLn "Running insecure server"
+          runSettings warpSettings app
+      putStrLn "Goodbye"
 
   where
 

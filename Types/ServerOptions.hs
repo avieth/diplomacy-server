@@ -25,8 +25,9 @@ import Data.Monoid ((<>))
 
 data ServerOptions = ServerOptions {
       adminUsername :: Username
-    , certificateFile :: FilePath
-    , keyFile :: FilePath
+    , certificateFile :: Maybe FilePath
+    , keyFile :: Maybe FilePath
+    , host :: String
     , port :: Int
     }
     deriving (Show)
@@ -37,9 +38,11 @@ parser =
     <$> adminUsernameParser
     <*> certificateFileParser
     <*> keyFileParser
+    <*> host
     <*> port
   where
     adminUsernameParser = strOption (long "username" <> short 'u' <> help "Username for administration")
-    certificateFileParser = strOption (long "certificate" <> short 'c' <> value "certificate.pem" <> help "Certificate for TLS")
-    keyFileParser = strOption (long "key" <> short 'k' <> value "key.pem" <> help "Private key for TLS")
-    port = option auto (short 'p' <> long "port" <> value 4347 <> help "Port on which to run the server")
+    certificateFileParser = optional $ strOption (long "certificate" <> short 'c' <> help "Certificate for TLS")
+    keyFileParser = optional $ strOption (long "key" <> short 'k' <> help "Private key for TLS")
+    host = strOption (short 'h' <> long "host" <> help "Host address (for bind, and for HTTPS redirect)")
+    port = option auto (short 'p' <> long "port" <> value 80 <> help "Port")
