@@ -103,6 +103,9 @@ data GameState where
 deriving instance Generic GameState
 instance NFData GameState where rnf x = seq x ()
 
+instance ToJSON GameState
+instance FromJSON GameState
+
 -- | The game state viewed as a certain player, who controls a set of
 --   GreatPowers.
 data GameStateView where
