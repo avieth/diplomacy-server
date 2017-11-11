@@ -56,12 +56,12 @@ executable diplomacy-server
                      , KindSignatures
 
   build-depends:       base >=4.7 && <5
-                     , async >=2.0 && <2.1
+                     , async >=2.0 && <2.2
                      , stm >=2.4 && <2.5
                      , transformers >=0.3 && <0.6
                      , containers >=0.5 && <0.6
                      , diplomacy >=0.2 && <0.3
-                     , TypeNat >=0.4 && <0.5
+                     , TypeNat >=0.5 && <0.6
                      , hourglass >=0.2 && <0.3
                      , rest-core >=0.39 && <0.40
                      , rest-wai >=0.1 && <1.0
